@@ -1,0 +1,71 @@
+name: ecommerce_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.8.1 <4.0.0'
+  flutter: '>=3.24.0' # Updated to support latest Flutter stable version
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI and Utilities
+  cupertino_icons: ^1.0.8
+  flutter_launcher_icons: ^0.14.4
+  flutter_native_splash: ^2.4.6
+  image_picker: ^1.1.2
+  intl: ^0.20.2
+  flutter_riverpod: ^2.6.1
+  shimmer: ^3.0.0
+  cached_network_image: ^3.4.1
+  google_maps_flutter: ^2.12.3
+  url_launcher: ^6.3.1
+  flutter_credit_card: ^4.1.0
+  flutter_stripe: ^11.5.0
+  firebase_analytics: ^11.5.2
+  paypal_sdk: ^1.0.11
+  shared_preferences: ^2.5.3
+  google_sign_in: ^7.0.1
+  flutter_facebook_auth: ^7.1.2
+  supabase_flutter: ^2.9.1 
+  badges: ^3.1.2
+
+  # Firebase - COMPATIBLE VERSIONS (July 2025)
+  firebase_core: ^3.15.1
+  firebase_auth: ^5.6.2 # Removed duplicate and kept compatible version
+  cloud_firestore: ^5.6.11
+  firebase_remote_config: ^5.0.1
+  firebase_messaging: ^15.2.9
+  firebase_storage: ^12.4.9
+  riverpod: ^2.6.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0 # Downgraded to stable version, adjust if ^6.0.0 is intentional
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/app_icon.png
+    - assets/images/splash_background.jpeg
+    - assets/images/apple_pay.png
+    - assets/images/facebook.png
+    - assets/images/google_pay.png
+    - assets/images/google.png
+    - assets/images/paypal.png
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+
+flutter_native_splash:
+  background_image: assets/images/splash_background.jpeg
+  image: assets/images/app_icon.png
+  android: true
+  ios: true
+  android_gravity: center
+  fullscreen: true

@@ -1,0 +1,272 @@
+import 'package:flutter/material.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'login_screen.dart';
+
+// Remote Config Provider
+final remoteConfigProvider = FutureProvider<FirebaseRemoteConfig>((ref) async {
+  final remoteConfig = FirebaseRemoteConfig.instance;
+  await remoteConfig.setConfigSettings(RemoteConfigSettings(
+    fetchTimeout: const Duration(seconds: 10),
+    minimumFetchInterval: const Duration(hours: 1),
+  ));
+  await remoteConfig.fetchAndActivate();
+  return remoteConfig;
+});
+
+// Welcome Content Provider
+final welcomeContentProvider = FutureProvider<WelcomeContent>((ref) async {
+  final remoteConfig = await ref.read(remoteConfigProvider.future);
+  return WelcomeContent.fromRemoteConfig(remoteConfig);
+});
+
+// Analytics Provider
+final analyticsProvider = Provider<FirebaseAnalytics>((ref) {
+  return FirebaseAnalytics.instance;
+});
+
+class WelcomeContent {
+  final String appName;
+  final String tagline;
+  final String buttonText;
+  final String? imageUrl;
+  final Color primaryColor;
+  final Color secondaryColor;
+  final bool showSkipButton;
+
+  WelcomeContent({
+    required this.appName,
+    required this.tagline,
+    required this.buttonText,
+    this.imageUrl,
+    this.primaryColor = Colors.green,
+    this.secondaryColor = Colors.white,
+    this.showSkipButton = false,
+  });
+
+  factory WelcomeContent.fromRemoteConfig(FirebaseRemoteConfig remoteConfig) {
+    return WelcomeContent(
+      appName: remoteConfig.getString('welcome_app_name'),
+      tagline: remoteConfig.getString('welcome_tagline'),
+      buttonText: remoteConfig.getString('welcome_button_text'),
+      imageUrl: remoteConfig.getString('welcome_image_url'),
+      primaryColor: Color(int.parse(
+        remoteConfig.getString('welcome_primary_color'),
+        radix: 16,
+      )),
+      secondaryColor: Color(int.parse(
+        remoteConfig.getString('welcome_secondary_color'),
+        radix: 16,
+      )),
+      showSkipButton: remoteConfig.getBool('welcome_show_skip_button'),
+    );
+  }
+}
+
+class WelcomeScreen extends ConsumerStatefulWidget {
+  const WelcomeScreen({super.key});
+
+  @override
+  ConsumerState<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
+  bool _isLoading = false;
+  bool _hasSeenWelcome = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkFirstSeen();
+    _logAnalyticsEvent('welcome_screen_view');
+  }
+
+  Future<void> _checkFirstSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _hasSeenWelcome = prefs.getBool('has_seen_welcome') ?? false;
+    });
+  }
+
+  Future<void> _logAnalyticsEvent(String eventName) async {
+    final analytics = ref.read(analyticsProvider);
+    await analytics.logEvent(
+      name: eventName,
+      parameters: {
+        'screen_name': 'WelcomeScreen',
+        'user_id': FirebaseAuth.instance.currentUser?.uid ?? 'anonymous',
+      },
+    );
+  }
+
+  Future<void> _navigateToLogin() async {
+    setState(() => _isLoading = true);
+    await _logAnalyticsEvent('welcome_continue_clicked');
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('has_seen_welcome', true);
+
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final welcomeContentAsync = ref.watch(welcomeContentProvider);
+
+    return Scaffold(
+      body: welcomeContentAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _buildErrorState(context, error),
+        data: (content) => _buildWelcomeContent(context, content),
+      ),
+    );
+  }
+
+  Widget _buildWelcomeContent(BuildContext context, WelcomeContent content) {
+    return Stack(
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                content.primaryColor.withAlpha(25),
+                content.secondaryColor.withAlpha(25),
+              ],
+            ),
+          ),
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (content.imageUrl != null) ...[
+                    Image.network(
+                      content.imageUrl!,
+                      height: 200,
+                      semanticLabel: 'Welcome image',
+                    ),
+                    const SizedBox(height: 40),
+                  ],
+                  Text(
+                    content.appName,
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: content.primaryColor,
+                    ),
+                    semanticsLabel: 'App name',
+                  ),
+                  const SizedBox(height: 20),
+                  Text(
+                    content.tagline,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                  const SizedBox(height: 40),
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _navigateToLogin,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: content.primaryColor,
+                      foregroundColor: content.secondaryColor,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 12,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            content.buttonText,
+                            style: const TextStyle(fontSize: 16),
+                          ),
+                  ),
+                  if (content.showSkipButton && _hasSeenWelcome) ...[
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: _isLoading ? null : _navigateToLogin,
+                      child: Text(
+                        'Skip for now',
+                        style: TextStyle(
+                          color: content.primaryColor,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          top: 16,
+          right: 16,
+          child: TextButton(
+            onPressed: () {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => const LoginScreen()),
+              );
+            },
+            child: Text(
+              'Admin Login',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildErrorState(BuildContext context, Object error) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          const SizedBox(height: 16),
+          const Text(
+            'Failed to load welcome content',
+            style: TextStyle(fontSize: 18),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            error.toString(),
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: () => ref.refresh(welcomeContentProvider),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
