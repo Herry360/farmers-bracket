@@ -41,46 +41,49 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'YOUR_WEB_API_KEY',
-    appId: '1:YOUR_APP_ID:web:YOUR_WEB_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    authDomain: 'YOUR_PROJECT_ID.firebaseapp.com',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-    measurementId: 'G-YOUR_MEASUREMENT_ID',
+    apiKey: 'AIzaSyA6yBJlSTBh6oc9Tr7hpi9hJvr9ZoOVQno',
+    appId: '1:1010865686579:web:54bba3f8f151c53ce63b46',
+    messagingSenderId: '1010865686579',
+    projectId: 'farmers-bracket-a9141',
+    authDomain: 'farmers-bracket-a9141.firebaseapp.com',
+    storageBucket: 'farmers-bracket-a9141.firebasestorage.app',
+    measurementId: 'G-ECLMQZ83F9',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'YOUR_ANDROID_API_KEY',
-    appId: '1:YOUR_APP_ID:android:YOUR_ANDROID_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyBCBPxRzBVueiZjqvRz_Zmq3t8BIsA9x7E',
+    appId: '1:1010865686579:android:ae9f1874496d23bbe63b46',
+    messagingSenderId: '1010865686579',
+    projectId: 'farmers-bracket-a9141',
+    storageBucket: 'farmers-bracket-a9141.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'YOUR_IOS_API_KEY',
-    appId: '1:YOUR_APP_ID:ios:YOUR_IOS_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-    iosBundleId: 'YOUR_IOS_BUNDLE_ID',
+    apiKey: 'AIzaSyA9Qf9R1_GTteme1aydn424FEuBqQG6jcM',
+    appId: '1:1010865686579:ios:e4567275a545e9bbe63b46',
+    messagingSenderId: '1010865686579',
+    projectId: 'farmers-bracket-a9141',
+    storageBucket: 'farmers-bracket-a9141.firebasestorage.app',
+    iosBundleId: 'com.example.ecommerceApp',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
-    apiKey: 'YOUR_MACOS_API_KEY',
-    appId: '1:YOUR_APP_ID:macos:YOUR_MACOS_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
-    iosBundleId: 'YOUR_IOS_BUNDLE_ID',
+    apiKey: 'AIzaSyA9Qf9R1_GTteme1aydn424FEuBqQG6jcM',
+    appId: '1:1010865686579:ios:e4567275a545e9bbe63b46',
+    messagingSenderId: '1010865686579',
+    projectId: 'farmers-bracket-a9141',
+    storageBucket: 'farmers-bracket-a9141.firebasestorage.app',
+    iosBundleId: 'com.example.ecommerceApp',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'YOUR_WINDOWS_API_KEY',
-    appId: '1:YOUR_APP_ID:windows:YOUR_WINDOWS_APP_ID',
-    messagingSenderId: 'YOUR_MESSAGING_SENDER_ID',
-    projectId: 'YOUR_PROJECT_ID',
-    storageBucket: 'YOUR_PROJECT_ID.appspot.com',
+    apiKey: 'AIzaSyA6yBJlSTBh6oc9Tr7hpi9hJvr9ZoOVQno',
+    appId: '1:1010865686579:web:25ba707af97594dfe63b46',
+    messagingSenderId: '1010865686579',
+    projectId: 'farmers-bracket-a9141',
+    authDomain: 'farmers-bracket-a9141.firebaseapp.com',
+    storageBucket: 'farmers-bracket-a9141.firebasestorage.app',
+    measurementId: 'G-4HSWX7PH21',
   );
+
 }

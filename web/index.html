@@ -4,21 +4,20 @@
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="description" content="Farmers Bracket E-commerce App">
 
-  <!-- iOS meta tags & icons -->
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <!-- Updated mobile-web-app-capable tag -->
+  <meta name="mobile-web-app-capable" content="yes">
+  
+  <!-- iOS meta tags & icons (kept for Safari compatibility) -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Farmers Bracket">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png">
-
-  <!-- CSS -->
-  <link rel="stylesheet" href="styles.css">
 
   <!-- Web App Manifest -->
   <link rel="manifest" href="manifest.json">
@@ -27,23 +26,54 @@
 
   <!-- Flutter initialization -->
   <script>
+    // Service worker version (update this when making changes to service worker)
+    const serviceWorkerVersion = '1.0';
+
     window.addEventListener('load', function(ev) {
-      // Download main.dart.js
-      window.addEventListener('online', function() {
-        if (window.flutterWebRenderer == 'html') {
-          _flutter.loader.loadEntrypoint({
-            serviceWorker: {
-              serviceWorkerVersion: serviceWorkerVersion,
-            }
-          }).then(function(engineInitializer) {
-            return engineInitializer.initializeEngine();
-          }).then(function(appRunner) {
-            return appRunner.runApp();
-          });
+      // Check if service worker is supported
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('flutter_service_worker.js?v=' + serviceWorkerVersion)
+          .then((reg) => console.log('Service worker registered', reg))
+          .catch((err) => console.error('Service worker registration failed', err));
+      }
+
+      // Initialize Flutter
+      _flutter.loader.loadEntrypoint({
+        serviceWorker: {
+          serviceWorkerVersion: serviceWorkerVersion,
         }
+      }).then(function(engineInitializer) {
+        return engineInitializer.initializeEngine();
+      }).then(function(appRunner) {
+        return appRunner.runApp();
       });
     });
   </script>
+
+  <!-- Modern CSS approach -->
+  <style>
+    #loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: white;
+      z-index: 9999;
+      transition: opacity 0.3s ease;
+    }
+    
+    /* Forced colors mode (replaces -ms-high-contrast) */
+    @media (forced-colors: active) {
+      #loading {
+        background: Canvas;
+        color: CanvasText;
+      }
+    }
+  </style>
 </head>
 <body>
   <!-- Flutter rendering -->
@@ -59,7 +89,9 @@
   <script>
     // Hide loading indicator when Flutter is ready
     window.addEventListener('flutter-first-frame', function() {
-      document.getElementById('loading').style.display = 'none';
+      const loading = document.getElementById('loading');
+      loading.style.opacity = '0';
+      setTimeout(() => loading.style.display = 'none', 300);
     });
   </script>
 </body>
