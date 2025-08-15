@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("com.google.gms.google-services")
+    id("com.google.firebase.crashlytics")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -8,7 +9,7 @@ plugins {
 android {
     namespace = "com.example.ecommerce_app"
     compileSdk = flutter.compileSdkVersion.toInt()
-    ndkVersion = "25.1.8937393" // Explicitly set NDK version here
+    ndkVersion = "27.0.12077973"  // Updated to match plugin requirements
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -21,7 +22,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.ecommerce_app"
-        minSdk = flutter.minSdkVersion.toInt()
+        minSdk = 23  // Changed from flutter.minSdkVersion to fix Firebase Analytics requirement
         targetSdk = flutter.targetSdkVersion.toInt()
         versionCode = flutter.versionCode.toInt()
         versionName = flutter.versionName
@@ -30,7 +31,6 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
-            // Add these lines for release builds
             ndk {
                 abiFilters.add("armeabi-v7a")
                 abiFilters.add("arm64-v8a")
