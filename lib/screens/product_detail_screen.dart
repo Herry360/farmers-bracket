@@ -17,6 +17,7 @@ class ProductDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const Key('product-detail'),
       appBar: AppBar(
         title: Text(productName),
       ),

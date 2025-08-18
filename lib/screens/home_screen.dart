@@ -308,9 +308,194 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  List<farm_model.Farm> _filterAndSortFarms(List<farm_model.Farm> farms, HomeScreenFilterState filterState) {
+    // Filter farms based on the filter state
+    var filteredFarms = farms.where((farm) {
+      // Search query filter
+      final matchesSearch = farm.name.toLowerCase().contains(filterState.searchQuery.toLowerCase()) ||
+          farm.location.toLowerCase().contains(filterState.searchQuery.toLowerCase()) ||
+          farm.description.toLowerCase().contains(filterState.searchQuery.toLowerCase());
+
+      // Location filter
+      final matchesLocation = filterState.location == 'All' || farm.location == filterState.location;
+
+      // Rating filter
+      final matchesRating = filterState.rating == 'All' ||
+          (filterState.rating == '4+ Stars' && farm.rating >= 4) ||
+          (filterState.rating == '3+ Stars' && farm.rating >= 3) ||
+          (filterState.rating == '2+ Stars' && farm.rating >= 2);
+
+      // Distance filter
+      final matchesDistance = farm.distance <= filterState.maxDistance;
+
+      // Favorites filter
+      final matchesFavorites = !filterState.showFavoritesOnly || farm.isFavorite;
+
+      return matchesSearch && matchesLocation && matchesRating && matchesDistance && matchesFavorites;
+    }).toList();
+
+    // Sort farms based on the sort option
+    switch (filterState.sortOption) {
+      case SortOption.distance:
+        filteredFarms.sort((a, b) => a.distance.compareTo(b.distance));
+        break;
+      case SortOption.rating:
+        filteredFarms.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case SortOption.name:
+        filteredFarms.sort((a, b) => a.name.compareTo(b.name));
+        break;
+    }
+
+    return filteredFarms;
+  }
+
+  Future<void> _showAdvancedFilterDialog(BuildContext context, WidgetRef ref) async {
+    final filterState = ref.read(homeScreenFilterProvider);
+    final notifier = ref.read(homeScreenFilterProvider.notifier);
+    final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Advanced Filters'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Sort By', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<SortOption>(
+                        value: filterState.sortOption,
+                        items: SortOption.values.map((option) {
+                          return DropdownMenuItem(
+                            value: option,
+                            child: Text(option.toString().split('.').last),
+                          );
+                        }).toList(),
+                        onChanged: (value) => notifier.setSortOption(value!),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        isExpanded: true,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Minimum Rating', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        value: filterState.rating,
+                        items: ratings.map((rating) {
+                          return DropdownMenuItem(
+                            value: rating,
+                            child: Text(rating),
+                          );
+                        }).toList(),
+                        onChanged: (value) => notifier.setRating(value!),
+                        decoration: const InputDecoration(
+                          border: OutlineInputBorder(),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        ),
+                        isExpanded: true,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Max Distance (${filterState.maxDistance.round()} km)',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      Slider(
+                        value: filterState.maxDistance,
+                        min: 5,
+                        max: 100,
+                        divisions: 19,
+                        label: '${filterState.maxDistance.round()} km',
+                        onChanged: notifier.setMaxDistance,
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Options', style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      SwitchListTile(
+                        title: const Text('Show Favorites Only'),
+                        value: filterState.showFavoritesOnly,
+                        onChanged: (_) => notifier.toggleFavorites(),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            notifier.resetFilters();
+                            Navigator.pop(context);
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                          ),
+                          child: Text(
+                            'Reset All',
+                            style: TextStyle(color: Theme.of(context).colorScheme.primary),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Apply Filters'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const Key('home-screen'),
       appBar: AppBar(
         title: const Text('FarmersBracket'),
         actions: [
@@ -461,6 +646,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildFarmList(List<farm_model.Farm> farms, HomeScreenFilterState filterState, ThemeData theme) {
     final filteredFarms = _filterAndSortFarms(farms, filterState);
 
+    if (filteredFarms.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text('No farms found', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text('Try adjusting your filters', style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      );
+    }
+
     return RefreshIndicator(
       onRefresh: () => ref.read(farmsProvider.notifier).refresh(),
       child: CustomScrollView(
@@ -563,264 +763,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
-          if (filteredFarms.isEmpty)
-            SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.search_off, size: 48, color: Colors.grey),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No farms match your filters',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: ref.read(homeScreenFilterProvider.notifier).resetFilters,
-                      child: const Text('Reset filters'),
-                    ),
-                  ],
-                ),
+          SliverPadding(
+            padding: const EdgeInsets.all(16),
+            sliver: SliverGrid(
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                childAspectRatio: 0.85,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
               ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.all(16),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  childAspectRatio: 0.85,
-                  crossAxisSpacing: 16,
-                  mainAxisSpacing: 16,
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => FarmCard(
-                    farm: filteredFarms[index],
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final farm = filteredFarms[index];
+                  return FarmCard(
+                    farm: farm,
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => FarmProductsScreen(farm: filteredFarms[index]),
+                          builder: (_) => FarmProductsScreen(farm: farm),
                         ),
                       );
                     },
-                    farmId: filteredFarms[index].id,
-                  ),
-                  childCount: filteredFarms.length,
-                ),
+                    onFavoriteToggle: () {
+                      ref.read(farmsProvider.notifier).toggleFavorite(farm.id);
+                    }, farmId: '',
+                  );
+                },
+                childCount: filteredFarms.length,
               ),
             ),
+          ),
         ],
       ),
-    );
-  }
-
-  List<farm_model.Farm> _filterAndSortFarms(List<farm_model.Farm> farms, HomeScreenFilterState state) {
-    final filtered = farms.where((farm) {
-      final matchesCategory = state.category == 'All' || farm.category == state.category;
-      final matchesSearch = state.searchQuery.isEmpty ||
-          farm.name.toLowerCase().contains(state.searchQuery.toLowerCase());
-      final matchesLocation = state.location == 'All' || farm.location == state.location;
-      final matchesRating = state.rating == 'All' ||
-          (state.rating == '4+ Stars' && farm.rating >= 4) ||
-          (state.rating == '3+ Stars' && farm.rating >= 3) ||
-          (state.rating == '2+ Stars' && farm.rating >= 2);
-      final matchesDistance = farm.distance <= state.maxDistance;
-      final matchesFavorites = !state.showFavoritesOnly || farm.isFavorite;
-
-      return matchesCategory && matchesSearch && matchesLocation &&
-          matchesRating && matchesDistance && matchesFavorites;
-    }).toList();
-
-    switch (state.sortOption) {
-      case SortOption.distance:
-        filtered.sort((a, b) => a.distance.compareTo(b.distance));
-        break;
-      case SortOption.rating:
-        filtered.sort((a, b) => b.rating.compareTo(a.rating));
-        break;
-      case SortOption.name:
-        filtered.sort((a, b) => a.name.compareTo(b.name));
-        break;
-    }
-
-    return filtered;
-  }
-
-  Future<void> _showAdvancedFilterDialog(BuildContext context, WidgetRef ref) async {
-    final locations = ['All', 'California, USA', 'Texas, USA', 'Colorado, USA'];
-    final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
-
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Consumer(
-          builder: (context, ref, _) {
-            final filterState = ref.watch(homeScreenFilterProvider);
-            final notifier = ref.read(homeScreenFilterProvider.notifier);
-            return Container(
-              decoration: BoxDecoration(
-                color: Theme.of(context).canvasColor,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Advanced Filters', style: Theme.of(context).textTheme.titleLarge),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Divider(height: 0),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Location', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: filterState.location,
-                          items: locations.map((location) {
-                            return DropdownMenuItem(
-                              value: location,
-                              child: Text(location),
-                            );
-                          }).toList(),
-                          onChanged: (value) => notifier.setLocation(value!),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          isExpanded: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Minimum Rating', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: filterState.rating,
-                          items: ratings.map((rating) {
-                            return DropdownMenuItem(
-                              value: rating,
-                              child: Text(rating),
-                            );
-                          }).toList(),
-                          onChanged: (value) => notifier.setRating(value!),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          isExpanded: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Max Distance (${filterState.maxDistance.round()} km)',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Slider(
-                          value: filterState.maxDistance,
-                          min: 5,
-                          max: 100,
-                          divisions: 19,
-                          label: '${filterState.maxDistance.round()} km',
-                          onChanged: notifier.setMaxDistance,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Options', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          title: const Text('Show Favorites Only'),
-                          value: filterState.showFavoritesOnly,
-                          onChanged: (_) => notifier.toggleFavorites(),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              notifier.resetFilters();
-                              Navigator.pop(context);
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(color: Theme.of(context).colorScheme.primary),
-                            ),
-                            child: Text(
-                              'Reset All',
-                              style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('Apply Filters'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 

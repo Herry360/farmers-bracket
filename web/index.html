@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <!-- Removed base href since it was causing path resolution issues -->
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="mobile-web-app-capable" content="yes">
@@ -10,13 +9,11 @@
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png">
   <link rel="manifest" href="manifest.json">
-  <!-- Added ./ to make path resolution explicit -->
-  <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="styles.css">
 
   <title>Farmers Bracket</title>
 
   <script>
-    // Prevent extension warnings in production
     if (!/debug|profile/.test(window.location.search)) {
       window._flutter = window._flutter || {};
       window._flutter.loader = {

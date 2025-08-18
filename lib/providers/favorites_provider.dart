@@ -115,6 +115,6 @@ final isFavoriteProvider = Provider.family<bool, Product>((ref, product) {
   return favorites.when(
     data: (favs) => favs.any((p) => p.id == product.id),
     loading: () => false,
-    error: (_, __) => false,
+    error: (_, _) => false,
   );
 });

@@ -121,10 +121,13 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     final welcomeContentAsync = ref.watch(welcomeContentProvider);
 
     return Scaffold(
-      body: welcomeContentAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _buildErrorState(context, error),
-        data: (content) => _buildWelcomeContent(context, content),
+      body: KeyedSubtree(
+        key: const Key('splash-view'),
+        child: welcomeContentAsync.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, _) => _buildErrorState(context, error),
+          data: (content) => _buildWelcomeContent(context, content),
+        ),
       ),
     );
   }

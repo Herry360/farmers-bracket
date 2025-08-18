@@ -11,7 +11,7 @@ class FarmCard extends StatefulWidget {
     super.key,
     required this.farmId,
     required this.onTap,
-    required this.farm,
+    required this.farm, required Null Function() onFavoriteToggle,
   });
 
   @override

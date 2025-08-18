@@ -308,6 +308,7 @@ class _FarmProductsScreenState extends ConsumerState<FarmProductsScreen> {
                           (context, index) {
                             final product = _products[index];
                             return ProductCard(
+                              key: index == 0 ? const Key('product-item-0') : null,
                               product: product,
                               isInCart: cartItems.any((item) => item.product.id == product.id),
                               onAddToCart: () {

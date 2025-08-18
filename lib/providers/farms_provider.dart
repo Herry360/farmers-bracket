@@ -57,7 +57,7 @@ final favoriteFarmsProvider = Provider<List<farm_model.Farm>>((ref) {
   return ref.watch(farmsProvider).when(
     data: (farms) => farms.where((farm) => farm.isFavorite).toList(),
     loading: () => [],
-    error: (_, __) => [],
+    error: (_, _) => [],
   );
 });
 
@@ -65,7 +65,7 @@ final farmsByCategoryProvider = Provider.family<List<farm_model.Farm>, String>((
   return ref.watch(farmsProvider).when(
     data: (farms) => farms.where((farm) => farm.category == category).toList(),
     loading: () => [],
-    error: (_, __) => [],
+    error: (_, _) => [],
   );
 });
 
