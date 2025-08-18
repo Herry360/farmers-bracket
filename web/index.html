@@ -31,7 +31,7 @@
           // Updated to use the modern load() method instead of loadEntrypoint()
           _flutter.load({
             serviceWorker: {
-              serviceWorkerVersion: serviceWorkerVersion,
+              // serviceWorkerVersion removed (was undefined)
             }
           }).then(function(engineInitializer) {
             return engineInitializer.initializeEngine();
