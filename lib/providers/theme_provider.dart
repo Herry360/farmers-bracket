@@ -1,65 +1,66 @@
-import 'package:firebase_remote_config/firebase_remote_config.dart';
+import 'package:ecommerce_app/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-final themeProvider = NotifierProvider<ThemeNotifier, ThemeState>(() {
-  return ThemeNotifier();
-});
+enum AppThemeMode { system, light, dark }
 
 class ThemeState {
-  final ThemeMode mode;
+  final AppThemeMode mode;
   final Color primaryColor;
   final Color secondaryColor;
   final bool amoledDark;
+  final bool isHighContrast;
 
-  ThemeState({
-    required this.mode,
-    required this.primaryColor,
-    required this.secondaryColor,
-    required this.amoledDark,
+  const ThemeState({
+    this.mode = AppThemeMode.system,
+    this.primaryColor = Colors.blue,
+    this.secondaryColor = Colors.amber,
+    this.amoledDark = false,
+    this.isHighContrast = false,
   });
 
   ThemeState copyWith({
-    ThemeMode? mode,
+    AppThemeMode? mode,
     Color? primaryColor,
     Color? secondaryColor,
     bool? amoledDark,
+    bool? isHighContrast,
   }) {
     return ThemeState(
       mode: mode ?? this.mode,
       primaryColor: primaryColor ?? this.primaryColor,
       secondaryColor: secondaryColor ?? this.secondaryColor,
       amoledDark: amoledDark ?? this.amoledDark,
+      isHighContrast: isHighContrast ?? this.isHighContrast,
     );
   }
 }
 
+final themeProvider = NotifierProvider<ThemeNotifier, ThemeState>(ThemeNotifier.new);
+
 class ThemeNotifier extends Notifier<ThemeState> {
   @override
   ThemeState build() {
-    // Default theme
-    return ThemeState(
-      mode: ThemeMode.system,
-      primaryColor: Colors.blue,
-      secondaryColor: Colors.amber,
-      amoledDark: false,
-    );
+    // Initialize with defaults
+    return const ThemeState();
   }
 
   Future<void> loadPreferences() async {
-    final prefs = ref.read(sharedPreferencesProvider);
     try {
-      final modeIndex = prefs.getInt('themeMode') ?? 0;
-      final primaryColorValue = prefs.getInt('primaryColor') ?? Colors.blue.value;
-      final secondaryColorValue = prefs.getInt('secondaryColor') ?? Colors.amber.value;
-      final amoledDark = prefs.getBool('amoledDark') ?? false;
+      final prefs = ref.read(sharedPreferencesProvider);
+      
+      final modeIndex = prefs.getInt('themeMode') ?? state.mode.index;
+      final primaryColor = prefs.getInt('primaryColor') ?? state.primaryColor.toARGB32();
+      final secondaryColor = prefs.getInt('secondaryColor') ?? state.secondaryColor.toARGB32();
+      final amoledDark = prefs.getBool('amoledDark') ?? state.amoledDark;
+      final highContrast = prefs.getBool('highContrast') ?? state.isHighContrast;
 
       state = state.copyWith(
-        mode: ThemeMode.values[modeIndex.clamp(0, ThemeMode.values.length - 1)],
-        primaryColor: Color(primaryColorValue),
-        secondaryColor: Color(secondaryColorValue),
+        mode: AppThemeMode.values[modeIndex.clamp(0, AppThemeMode.values.length - 1)],
+        primaryColor: Color(primaryColor),
+        secondaryColor: Color(secondaryColor),
         amoledDark: amoledDark,
+        isHighContrast: highContrast,
       );
     } catch (e) {
       debugPrint('Error loading theme preferences: $e');
@@ -68,78 +69,56 @@ class ThemeNotifier extends Notifier<ThemeState> {
 
   Future<void> _savePreferences() async {
     final prefs = ref.read(sharedPreferencesProvider);
-    await prefs.setInt('themeMode', state.mode.index);
-    await prefs.setInt('primaryColor', state.primaryColor.value);
-    await prefs.setInt('secondaryColor', state.secondaryColor.value);
-    await prefs.setBool('amoledDark', state.amoledDark);
+    await Future.wait([
+      prefs.setInt('themeMode', state.mode.index),
+      prefs.setInt('primaryColor', state.primaryColor.toARGB32()),
+      prefs.setInt('secondaryColor', state.secondaryColor.toARGB32()),
+      prefs.setBool('amoledDark', state.amoledDark),
+      prefs.setBool('highContrast', state.isHighContrast),
+    ]);
   }
 
-  void toggleDarkMode() {
-    final newMode = state.mode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    state = state.copyWith(mode: newMode);
-    _savePreferences();
+  Future<void> updateThemeMode(AppThemeMode mode) async {
+    state = state.copyWith(mode: mode);
+    await _savePreferences();
+  }
+
+  Future<void> updatePrimaryColor(Color color) async {
+    state = state.copyWith(primaryColor: color);
+    await _savePreferences();
+  }
+
+  Future<void> updateSecondaryColor(Color color) async {
+    state = state.copyWith(secondaryColor: color);
+    await _savePreferences();
+  }
+
+  Future<void> toggleAmoledDark(bool value) async {
+    state = state.copyWith(amoledDark: value);
+    await _savePreferences();
+  }
+
+  Future<void> toggleHighContrast(bool value) async {
+    state = state.copyWith(isHighContrast: value);
+    await _savePreferences();
+  }
+
+  Future<void> resetToDefaults() async {
+    state = const ThemeState();
+    await _savePreferences();
   }
 
   void setPrimaryColor(Color color) {
     state = state.copyWith(primaryColor: color);
-    _savePreferences();
   }
 
   void setSecondaryColor(Color color) {
     state = state.copyWith(secondaryColor: color);
-    _savePreferences();
   }
 
-  void toggleAmoledDark(bool value) {
-    state = state.copyWith(amoledDark: value);
-    _savePreferences();
+  void toggleDarkMode() {
+    state = state.copyWith(
+      mode: state.mode == AppThemeMode.dark ? AppThemeMode.light : AppThemeMode.dark
+    );
   }
 }
-
-final themeDataProvider = Provider<ThemeData>((ref) {
-  final theme = ref.watch(themeProvider);
-  final isDark = theme.mode == ThemeMode.dark;
-  final amoledBlack = isDark && theme.amoledDark;
-
-  return ThemeData(
-    useMaterial3: true,
-    brightness: isDark ? Brightness.dark : Brightness.light,
-    colorScheme: ColorScheme(
-      primary: theme.primaryColor,
-      primaryContainer: theme.primaryColor.withOpacity(0.8),
-      secondary: theme.secondaryColor,
-      secondaryContainer: theme.secondaryColor.withOpacity(0.8),
-      surface: amoledBlack ? Colors.black : isDark ? Colors.grey[900]! : Colors.white,
-      background: amoledBlack ? Colors.black : isDark ? Colors.grey[900]! : Colors.white,
-      error: Colors.red,
-      onPrimary: Colors.white,
-      onSecondary: Colors.black,
-      onSurface: isDark ? Colors.white : Colors.black,
-      onBackground: isDark ? Colors.white : Colors.black,
-      onError: Colors.white,
-      brightness: isDark ? Brightness.dark : Brightness.light,
-    ),
-    appBarTheme: AppBarTheme(
-      backgroundColor: isDark ? Colors.grey[900] : theme.primaryColor,
-      foregroundColor: isDark ? Colors.white : Colors.white,
-    ),
-    floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: theme.secondaryColor,
-      foregroundColor: Colors.black,
-    ),
-  );
-});
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('sharedPreferencesProvider must be overridden');
-});
-
-final remoteConfigProvider = Provider<FirebaseRemoteConfig>((ref) {
-  final remoteConfig = FirebaseRemoteConfig.instance;
-  remoteConfig.setDefaults({
-    'default_theme_mode': ThemeMode.system.index,
-    'default_primary_color': Colors.blue.value,
-    'default_secondary_color': Colors.teal.value,
-    'default_amoled_dark': false,
-  });
-  return remoteConfig;
-});

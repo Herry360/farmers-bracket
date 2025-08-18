@@ -1,58 +1,21 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <base href="$FLUTTER_BASE_HREF">
+  <base href="/">
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="description" content="Farmers Bracket E-commerce App">
-
-  <!-- Updated mobile-web-app-capable tag -->
   <meta name="mobile-web-app-capable" content="yes">
   
-  <!-- iOS meta tags & icons (kept for Safari compatibility) -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Farmers Bracket">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png">
-
-  <!-- Web App Manifest -->
   <link rel="manifest" href="manifest.json">
 
   <title>Farmers Bracket</title>
 
-  <!-- Flutter initialization -->
-  <script>
-    // Service worker version (update this when making changes to service worker)
-    const serviceWorkerVersion = '1.0';
-
-    window.addEventListener('load', function(ev) {
-      // Check if service worker is supported
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('flutter_service_worker.js?v=' + serviceWorkerVersion)
-          .then((reg) => console.log('Service worker registered', reg))
-          .catch((err) => console.error('Service worker registration failed', err));
-      }
-
-      // Initialize Flutter
-      _flutter.loader.loadEntrypoint({
-        serviceWorker: {
-          serviceWorkerVersion: serviceWorkerVersion,
-        }
-      }).then(function(engineInitializer) {
-        return engineInitializer.initializeEngine();
-      }).then(function(appRunner) {
-        return appRunner.runApp();
-      });
-    });
-  </script>
-
-  <!-- Modern CSS approach -->
   <style>
-    #loading {
+    /* Loading screen styles */
+    #app-loading {
       position: fixed;
       top: 0;
       left: 0;
@@ -63,36 +26,140 @@
       align-items: center;
       background: white;
       z-index: 9999;
-      transition: opacity 0.3s ease;
+      transition: opacity 0.5s ease;
     }
     
-    /* Forced colors mode (replaces -ms-high-contrast) */
+    .loading-content {
+      text-align: center;
+      max-width: 300px;
+      padding: 20px;
+    }
+    
+    .loading-spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(0,0,0,0.1);
+      border-radius: 50%;
+      border-left-color: #2e7d32;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 16px;
+    }
+    
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Error message styles */
+    .error-message {
+      color: #d32f2f;
+      margin-top: 16px;
+    }
+    
+    .reload-button {
+      padding: 8px 16px;
+      margin-top: 16px;
+      background: #2e7d32;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    /* Accessibility support */
     @media (forced-colors: active) {
-      #loading {
+      #app-loading {
         background: Canvas;
         color: CanvasText;
       }
+      .loading-spinner {
+        border-left-color: LinkText;
+      }
+      .reload-button {
+        forced-color-adjust: none;
+        background-color: LinkText;
+        color: Canvas;
+      }
     }
   </style>
+
+  <script>
+    // Prevent extension warnings in production
+    if (!/debug|profile/.test(window.location.search)) {
+      window._flutter = window._flutter || {};
+      window._flutter.loader = {
+        loadEntrypoint: function() { return Promise.resolve(); }
+      };
+    }
+  </script>
+  <script src="flutter.js" defer></script>
 </head>
 <body>
-  <!-- Flutter rendering -->
-  <script src="flutter_bootstrap.js" async></script>
-  
-  <!-- Loading indicator -->
-  <div id="loading">
+  <div id="app-loading">
     <div class="loading-content">
-      <p>Loading Farmers Bracket...</p>
+      <div class="loading-spinner"></div>
+      <p>Loading application...</p>
     </div>
   </div>
-  
+
   <script>
-    // Hide loading indicator when Flutter is ready
-    window.addEventListener('flutter-first-frame', function() {
-      const loading = document.getElementById('loading');
-      loading.style.opacity = '0';
-      setTimeout(() => loading.style.display = 'none', 300);
-    });
+    (function() {
+      function initializeFlutter() {
+        if (typeof _flutter !== 'undefined') {
+          _flutter.loader.loadEntrypoint({
+            onEntrypointLoaded: async (engineInitializer) => {
+              try {
+                const appRunner = await engineInitializer.initializeEngine();
+                await appRunner.runApp();
+                hideSplash();
+              } catch (error) {
+                showError('Application failed to start. Please refresh.');
+                console.error('Flutter error:', error);
+              }
+            }
+          });
+        } else {
+          showError('Flutter engine not loaded. Try clearing cache.');
+        }
+      }
+
+      function hideSplash() {
+        const splash = document.getElementById('app-loading');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(() => splash.remove(), 500);
+        }
+      }
+
+      function showError(message) {
+        const splash = document.getElementById('app-loading');
+        if (splash) {
+          splash.querySelector('.loading-content').innerHTML = `
+            <div class="error-message">
+              <h2>Error</h2>
+              <p>${message}</p>
+            </div>
+            <button class="reload-button" onclick="window.location.reload()">
+              Reload Application
+            </button>
+          `;
+        }
+      }
+
+      window.addEventListener('load', function() {
+        initializeFlutter();
+        
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.register('flutter_service_worker.js')
+            .catch(err => console.debug('Service worker:', err));
+        }
+      });
+
+      window.addEventListener('error', function(event) {
+        showError('Application error: ' + (event.message || 'Unknown error'));
+      });
+    })();
   </script>
 </body>
 </html>
