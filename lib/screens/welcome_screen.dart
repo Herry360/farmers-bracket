@@ -19,8 +19,21 @@ final remoteConfigProvider = FutureProvider<FirebaseRemoteConfig>((ref) async {
 
 // Welcome Content Provider
 final welcomeContentProvider = FutureProvider<WelcomeContent>((ref) async {
-  final remoteConfig = await ref.read(remoteConfigProvider.future);
-  return WelcomeContent.fromRemoteConfig(remoteConfig);
+  try {
+    final remoteConfig = await ref.read(remoteConfigProvider.future).timeout(const Duration(seconds: 8));
+    return WelcomeContent.fromRemoteConfig(remoteConfig);
+  } catch (e) {
+    // Fallback content if remote config fails or times out
+    return WelcomeContent(
+      appName: 'FarmersBracket',
+      tagline: 'Welcome to the Farmers Market!',
+      buttonText: 'Continue',
+      imageUrl: null,
+      primaryColor: Colors.green,
+      secondaryColor: Colors.white,
+      showSkipButton: false,
+    );
+  }
 });
 
 // Analytics Provider

@@ -1,6 +1,5 @@
 import 'package:ecommerce_app/core/constants/app_constants.dart';
-import 'package:ecommerce_app/core/routes/app_routes.dart';
-import 'package:ecommerce_app/core/routes/route_generator.dart';
+import 'package:ecommerce_app/screens/welcome_screen.dart';
 import 'package:ecommerce_app/core/services/navigation_service.dart';
 import 'package:ecommerce_app/providers/theme_provider.dart';
 import 'package:flutter/material.dart';
@@ -28,18 +27,28 @@ final navigationService = NavigationService();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  await _initializeAppServices();
-  
-  runApp(
-    ProviderScope(
-      overrides: [
-        sharedPreferencesProvider.overrideWithValue(await SharedPreferences.getInstance()),
-        remoteConfigProvider.overrideWithValue(FirebaseRemoteConfig.instance),
-      ],
-      child: const ECommerceApp(),
-    ),
-  );
+  try {
+    await _initializeAppServices();
+    runApp(
+      ProviderScope(
+        overrides: [
+          sharedPreferencesProvider.overrideWithValue(await SharedPreferences.getInstance()),
+          remoteConfigProvider.overrideWithValue(FirebaseRemoteConfig.instance),
+        ],
+        child: const ECommerceApp(),
+      ),
+    );
+  } catch (e) {
+    runApp(MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Text('App failed to start: '
+              '${e.toString()}',
+              style: TextStyle(fontSize: 18, color: Colors.red)),
+        ),
+      ),
+    ));
+  }
 }
 
 Future<void> _initializeAppServices() async {
@@ -52,7 +61,7 @@ Future<void> _initializeAppServices() async {
     // Initialize Remote Config
     final remoteConfig = FirebaseRemoteConfig.instance;
     await remoteConfig.setConfigSettings(RemoteConfigSettings(
-      fetchTimeout: const Duration(minutes: 1),
+      fetchTimeout: const Duration(seconds: 10),
       minimumFetchInterval: const Duration(hours: 1),
     ));
     await remoteConfig.setDefaults(AppConstants.remoteConfigDefaults);
@@ -96,8 +105,14 @@ class ECommerceApp extends ConsumerWidget {
       darkTheme: themeData, // You might want to create a separate darkTheme
       themeMode: _convertToThemeMode(themeState.mode),
       navigatorKey: navigationService.navigatorKey,
-      initialRoute: AppRoutes.splash,
-      onGenerateRoute: RouteGenerator.generateRoute,
+      initialRoute: '/welcome',
+      onGenerateRoute: (settings) {
+        if (settings.name == '/welcome') {
+          return MaterialPageRoute(builder: (_) => const WelcomeScreen());
+        }
+        // Add other routes here as needed
+        return null;
+      },
       builder: (context, child) {
         return GestureDetector(
           onTap: () => FocusManager.instance.primaryFocus?.unfocus(),

@@ -13,14 +13,7 @@
 
   <title>Farmers Bracket</title>
 
-  <script>
-    if (!/debug|profile/.test(window.location.search)) {
-      window._flutter = window._flutter || {};
-      window._flutter.loader = {
-        loadEntrypoint: function() { return Promise.resolve(); }
-      };
-    }
-  </script>
+  <!-- Updated Flutter loader initialization -->
   <script src="flutter.js" defer></script>
 </head>
 <body>
@@ -35,17 +28,20 @@
     (function() {
       function initializeFlutter() {
         if (typeof _flutter !== 'undefined') {
-          _flutter.loader.loadEntrypoint({
-            onEntrypointLoaded: async (engineInitializer) => {
-              try {
-                const appRunner = await engineInitializer.initializeEngine();
-                await appRunner.runApp();
-                hideSplash();
-              } catch (error) {
-                showError('Application failed to start. Please refresh.');
-                console.error('Flutter error:', error);
-              }
+          // Updated to use the modern load() method instead of loadEntrypoint()
+          _flutter.load({
+            serviceWorker: {
+              serviceWorkerVersion: serviceWorkerVersion,
             }
+          }).then(function(engineInitializer) {
+            return engineInitializer.initializeEngine();
+          }).then(function(appRunner) {
+            return appRunner.runApp();
+          }).then(function() {
+            hideSplash();
+          }).catch(function(error) {
+            showError('Application failed to start. Please refresh.');
+            console.error('Flutter error:', error);
           });
         } else {
           showError('Flutter engine not loaded. Try clearing cache.');
@@ -78,10 +74,7 @@
       window.addEventListener('load', function() {
         initializeFlutter();
         
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.register('flutter_service_worker.js')
-            .catch(err => console.debug('Service worker:', err));
-        }
+        // Remove manual service worker registration - Flutter.js handles this now
       });
 
       window.addEventListener('error', function(event) {
