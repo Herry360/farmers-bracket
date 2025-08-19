@@ -29,19 +29,19 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
       "farmerId": "farmer_001",
       "farmerName": "Green Valley Farm",
       "location": "Fresno, CA",
-      "deliveryFee": "\R5.99",
+      "deliveryFee": "R5.99",
       "estimatedDelivery": "Tomorrow",
-      "minimumOrder": "\R25.00",
+      "minimumOrder": "R25.00",
       "itemCount": 3,
       "items": [
         {
           "id": "item_001",
           "name": "Organic Tomatoes",
           "farmer": "Green Valley Farm",
-          "price": "\R4.99",
+          "price": "R4.99",
           "unit": "kg",
           "quantity": 2,
-          "subtotal": "\R9.98",
+          "subtotal": "R9.98",
           "image":
               "https://images.pexels.com/photos/533280/pexels-photo-533280.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
           "isAvailable": true,
@@ -50,10 +50,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
           "id": "item_002",
           "name": "Fresh Spinach",
           "farmer": "Green Valley Farm",
-          "price": "\R3.49",
+          "price": "R3.49",
           "unit": "bunch",
           "quantity": 1,
-          "subtotal": "\R3.49",
+          "subtotal": "R3.49",
           "image":
               "https://images.pexels.com/photos/2325843/pexels-photo-2325843.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
           "isAvailable": true,
@@ -62,10 +62,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
           "id": "item_003",
           "name": "Bell Peppers",
           "farmer": "Green Valley Farm",
-          "price": "\R2.99",
+          "price": "R2.99",
           "unit": "lb",
           "quantity": 1,
-          "subtotal": "\R2.99",
+          "subtotal": "R2.99",
           "image":
               "https://images.pexels.com/photos/1268101/pexels-photo-1268101.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
           "isAvailable": false,
@@ -76,7 +76,7 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
       "farmerId": "farmer_002",
       "farmerName": "Sunrise Organic",
       "location": "Salinas, CA",
-      "deliveryFee": "\R4.99",
+      "deliveryFee": "R4.99",
       "estimatedDelivery": "2 days",
       "minimumOrder": null,
       "itemCount": 2,
@@ -85,10 +85,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
           "id": "item_004",
           "name": "Organic Carrots",
           "farmer": "Sunrise Organic",
-          "price": "\R2.49",
+          "price": "R2.49",
           "unit": "lb",
           "quantity": 3,
-          "subtotal": "\R7.47",
+          "subtotal": "R7.47",
           "image":
               "https://images.pexels.com/photos/143133/pexels-photo-143133.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
           "isAvailable": true,
@@ -97,10 +97,10 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
           "id": "item_005",
       "name": "Fresh Broccoli",
       "farmer": "Sunrise Organic",
-      "price": "\R3.99",
+      "price": "R3.99",
       "unit": "item",
       "quantity": 2,
-      "subtotal": "\R7.98",
+      "subtotal": "R7.98",
       "image":
         "https://images.pexels.com/photos/47347/broccoli-vegetable-food-healthy-47347.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1",
       "isAvailable": true,
@@ -110,17 +110,17 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
   ];
 
   // Order summary data
-  Map<String, dynamic> _orderSummary = {
-    "subtotal": "\R31.91",
-    "deliveryFees": "\R10.98",
-    "tax": "\R3.43",
-    "discount": "\R0.00",
-    "total": "\R46.32",
-    "totalSavings": "\R0.00",
+  final Map<String, dynamic> _orderSummary = {
+    "subtotal": "R31.91",
+    "deliveryFees": "R10.98",
+    "tax": "R3.43",
+    "discount": "R0.00",
+    "total": "R46.32",
+    "totalSavings": "R0.00",
   };
 
   // Expanded state for farmer groups
-  Map<String, bool> _expandedGroups = {};
+  final Map<String, bool> _expandedGroups = {};
 
   @override
   void initState() {
@@ -508,15 +508,15 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
 
         // Apply discount
         final discount = promoCode == 'save10' ? 4.63 : 9.26; // 10% or 20%
-        _orderSummary["discount"] = "\R${discount.toStringAsFixed(2)}";
-        _orderSummary["totalSavings"] = "\R${discount.toStringAsFixed(2)}";
+        _orderSummary["discount"] = "R${discount.toStringAsFixed(2)}";
+        _orderSummary["totalSavings"] = "R${discount.toStringAsFixed(2)}";
 
         _recalculateOrderSummary();
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-                'Promo code applied! You saved \R${discount.toStringAsFixed(2)}'),
+                'Promo code applied! You saved R${discount.toStringAsFixed(2)}'),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -537,29 +537,29 @@ class _ShoppingCartScreenState extends State<ShoppingCartScreen>
       for (var item in items) {
         if (item["isAvailable"] == true) {
           final itemSubtotal = double.parse(
-            (item["subtotal"] as String).replaceAll('\R', ''),
+            (item["subtotal"] as String).replaceAll('R', ''),
           );
           subtotal += itemSubtotal;
         }
       }
 
       final groupDeliveryFee = double.parse(
-        (group["deliveryFee"] as String).replaceAll('\R', ''),
+        (group["deliveryFee"] as String).replaceAll('R', ''),
       );
       deliveryFees += groupDeliveryFee;
     }
 
     final discount = double.parse(
-      _orderSummary["discount"].toString().replaceAll('\R', ''),
+      _orderSummary["discount"].toString().replaceAll('R', ''),
     );
     final tax = (subtotal + deliveryFees - discount) * 0.08; // 8% tax
     final total = subtotal + deliveryFees + tax - discount;
 
     setState(() {
-      _orderSummary["subtotal"] = "\R${subtotal.toStringAsFixed(2)}";
-      _orderSummary["deliveryFees"] = "\R${deliveryFees.toStringAsFixed(2)}";
-      _orderSummary["tax"] = "\R${tax.toStringAsFixed(2)}";
-      _orderSummary["total"] = "\R${total.toStringAsFixed(2)}";
+      _orderSummary["subtotal"] = "R${subtotal.toStringAsFixed(2)}";
+      _orderSummary["deliveryFees"] = "R${deliveryFees.toStringAsFixed(2)}";
+      _orderSummary["tax"] = "R${tax.toStringAsFixed(2)}";
+      _orderSummary["total"] = "R${total.toStringAsFixed(2)}";
     });
   }
 

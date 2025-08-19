@@ -7,11 +7,11 @@ class FarmerInfoCard extends StatelessWidget {
   final String farmerImageUrl;
 
   const FarmerInfoCard({
-    Key? key,
+    super.key,
     required this.farmerName,
     required this.farmerLocation,
     required this.farmerImageUrl,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

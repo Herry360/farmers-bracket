@@ -92,8 +92,9 @@ class _PhotoGalleryWidgetState extends State<PhotoGalleryWidget> {
   }
 
   Future<void> _capturePhoto() async {
-    if (_cameraController == null || !_cameraController!.value.isInitialized)
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
       return;
+    }
 
     try {
       final XFile photo = await _cameraController!.takePicture();

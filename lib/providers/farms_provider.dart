@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logger/logger.dart';
 import '../models/farm.dart' as farm_model;
 
 class FarmsNotifier extends StateNotifier<AsyncValue<List<farm_model.Farm>>> {
@@ -51,7 +52,7 @@ class FarmsNotifier extends StateNotifier<AsyncValue<List<farm_model.Farm>>> {
     // to your backend or local storage
     try {
       await Future.delayed(const Duration(milliseconds: 200)); // Simulate API call
-      print('Favorite status updated for farm $farmId: $isFavorite');
+  Logger().i('Favorite status updated for farm $farmId: $isFavorite');
     } catch (e) {
       // Revert the change if the persistence fails
       state = state.whenData((farms) {

@@ -31,6 +31,7 @@ dependencies:
   flutter_facebook_auth: ^7.1.2
   supabase_flutter: ^2.9.1 
   badges: ^3.1.2
+  
 
   # Firebase - COMPATIBLE VERSIONS (July 2025)
   #firebase_core: ^3.15.1
@@ -47,21 +48,29 @@ dependencies:
   google_fonts: ^6.3.0
   flutter_svg: ^2.0.13
 
+  auto_route: ^10.1.2
+  auto_route_generator: ^10.2.3
+  build_runner: ^2.5.4
+  logger: ^2.0.2
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^5.0.0 # Downgraded to stable version, adjust if ^6.0.0 is intentional
+  flutter_lints: ^5.0.0
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/app_icon.png
-    - assets/images/splash_background.jpeg
     - assets/images/apple_pay.png
     - assets/images/facebook.png
     - assets/images/google_pay.png
     - assets/images/google.png
+    - assets/images/img_app_logo.svg
+    - assets/images/no-image.jpg
     - assets/images/paypal.png
+    - assets/images/sad_face.svg
+    - assets/images/splash_background.jpeg
 
 flutter_icons:
   android: true

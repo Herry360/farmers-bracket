@@ -16,8 +16,8 @@ class AddressCard extends StatefulWidget {
 
 class _AddressCardState extends State<AddressCard> {
   Map<String, dynamic>? _address;
-  bool _isLoading = false;
-  bool _hasError = false;
+  final bool _isLoading = false;
+  final bool _hasError = false;
 
   @override
   void initState() {

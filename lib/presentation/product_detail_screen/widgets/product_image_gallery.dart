@@ -50,7 +50,7 @@ class _ProductImageGalleryState extends State<ProductImageGallery> {
   Widget build(BuildContext context) {
   final colorScheme = Theme.of(context).colorScheme;
 
-    return Container(
+    return SizedBox(
       height: 85.w,
       width: double.infinity,
       child: Stack(

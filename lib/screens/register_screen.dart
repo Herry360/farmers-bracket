@@ -108,7 +108,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
+                    fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.2),
                   ),
                   textCapitalization: TextCapitalization.words,
                   validator: (value) {
@@ -133,7 +133,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
+                    fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.2),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
@@ -159,7 +159,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
+                    fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.2),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
@@ -195,7 +195,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     filled: true,
-                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
+                    fillColor: colorScheme.surfaceContainerHighest.withOpacity(0.2),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureConfirmPassword

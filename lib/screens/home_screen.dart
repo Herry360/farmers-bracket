@@ -1,3 +1,4 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shimmer/shimmer.dart';
@@ -66,6 +67,7 @@ class HomeScreenFilterNotifier extends ChangeNotifier {
 
 final homeScreenFilterProvider = ChangeNotifierProvider<HomeScreenFilterNotifier>((ref) => HomeScreenFilterNotifier());
 
+@RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
@@ -227,10 +229,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 8),
           TextButton(
             onPressed: () => ref.read(farmsProvider.notifier).refresh(),
-            child: const Text('Retry'),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.primary,
             ),
+            child: const Text('Retry'),
           ),
         ],
       ),
@@ -441,10 +443,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 8),
           TextButton(
             onPressed: ref.read(homeScreenFilterProvider.notifier).resetFilters,
-            child: const Text('Reset filters'),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.primary,
             ),
+            child: const Text('Reset filters'),
           ),
         ],
       ),

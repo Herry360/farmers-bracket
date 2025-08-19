@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logger/logger.dart';
 import '../models/product.dart';
 
 class FavoritesNotifier extends StateNotifier<AsyncValue<List<Product>>> {
@@ -42,7 +43,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<List<Product>>> {
       _favorites = newFavorites;
       
       // Here you would typically persist to local storage or API
-      print('Favorite toggled for product ${product.id}');
+  Logger().i('Favorite toggled for product ${product.id}');
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -54,7 +55,7 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<List<Product>>> {
       _favorites = [];
       
       // Here you would typically clear from local storage or API
-      print('All favorites cleared');
+  Logger().i('All favorites cleared');
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }

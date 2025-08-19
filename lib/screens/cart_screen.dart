@@ -1,3 +1,4 @@
+import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
@@ -45,6 +46,7 @@ final cartProvider = StateNotifierProvider<CartNotifier, List<Product>>((ref) {
   return CartNotifier();
 });
 
+@RoutePage()
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
 
