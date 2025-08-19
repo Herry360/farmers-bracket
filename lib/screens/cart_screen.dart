@@ -1,26 +1,57 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
 import 'checkout_screen.dart';
 
-class CartScreen extends ConsumerStatefulWidget {
+// Cart state notifier
+class CartNotifier extends StateNotifier<List<Product>> {
+  CartNotifier() : super([]);
+
+  void addToCart(Product product) {
+    final existingIndex = state.indexWhere((p) => p.id == product.id);
+    if (existingIndex >= 0) {
+      state = [
+        ...state.sublist(0, existingIndex),
+        state[existingIndex].copyWith(
+          quantity: state[existingIndex].quantity + product.quantity,
+        ),
+        ...state.sublist(existingIndex + 1),
+      ];
+    } else {
+      state = [...state, product];
+    }
+  }
+
+  void removeFromCart(String productId) {
+    state = state.where((product) => product.id != productId).toList();
+  }
+
+  void updateQuantity(String productId, int newQuantity) {
+    state = state.map((product) {
+      if (product.id == productId) {
+        return product.copyWith(quantity: newQuantity);
+      }
+      return product;
+    }).toList();
+  }
+
+  void clearCart() {
+    state = [];
+  }
+}
+
+// Provider
+final cartProvider = StateNotifierProvider<CartNotifier, List<Product>>((ref) {
+  return CartNotifier();
+});
+
+class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
 
   @override
-  ConsumerState<CartScreen> createState() => _CartScreenState();
-}
-
-class _CartScreenState extends ConsumerState<CartScreen> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  @override
-  Widget build(BuildContext context) {
-    final userId = _auth.currentUser?.uid;
-    final cartStream = _firestore.collection('users').doc(userId).collection('cart').snapshots();
-    double totalPrice = 0;
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cartItems = ref.watch(cartProvider);
+    final totalPrice = cartItems.fold(0.0, (sum, item) => sum + (item.price * item.quantity));
     final shippingFee = 5.00;
 
     return Scaffold(
@@ -28,64 +59,28 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         title: const Text('Your Cart'),
         centerTitle: true,
         actions: [
-          if (userId != null)
-            StreamBuilder<QuerySnapshot>(
-              stream: cartStream,
-              builder: (context, snapshot) {
-                if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
-                  return IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    tooltip: 'Clear cart',
-                    onPressed: () => _showClearCartDialog(context),
-                  );
-                }
-                return const SizedBox.shrink();
-              },
+          if (cartItems.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Clear cart',
+              onPressed: () => _showClearCartDialog(context, ref),
             ),
         ],
       ),
-      body: userId == null 
-          ? _buildNotSignedIn(context)
-          : StreamBuilder<QuerySnapshot>(
-              stream: cartStream,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return _buildEmptyCart(context);
-                }
-
-                final cartItems = snapshot.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  totalPrice = (data['price'] * data['quantity']);
-                  return Product(
-                    id: doc.id,
-                    title: data['title'],
-                    price: data['price'],
-                    imageUrl: data['imageUrl'],
-                    quantity: data['quantity'], description: '', category: '', farmId: '',
-                  );
-                }).toList();
-
-                // Calculate total price
-                totalPrice = cartItems.fold(0, (sum, item) => sum + (item.price * item.quantity));
-
-                return Column(
-                  children: [
-                    Expanded(
-                      child: _buildCartItemsList(context, cartItems),
-                    ),
-                    _buildCartSummary(context, totalPrice, shippingFee),
-                  ],
-                );
-              },
+      body: cartItems.isEmpty
+          ? _buildEmptyCart(context)
+          : Column(
+              children: [
+                Expanded(
+                  child: _buildCartItemsList(context, ref, cartItems),
+                ),
+                _buildCartSummary(context, totalPrice, shippingFee),
+              ],
             ),
     );
   }
 
-  Widget _buildCartItemsList(BuildContext context, List<Product> cartItems) {
+  Widget _buildCartItemsList(BuildContext context, WidgetRef ref, List<Product> cartItems) {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: cartItems.length,
@@ -105,16 +100,17 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             return await _showDeleteConfirmation(context, product.title);
           },
           onDismissed: (direction) {
-            _removeFromCart(product.id);
-            _showUndoSnackbar(context, product);
+            final removedProduct = product;
+            ref.read(cartProvider.notifier).removeFromCart(product.id);
+            _showUndoSnackbar(context, ref, removedProduct);
           },
-          child: _buildCartItemTile(context, product),
+          child: _buildCartItemTile(context, ref, product),
         );
       },
     );
   }
 
-  Widget _buildCartItemTile(BuildContext context, Product product) {
+  Widget _buildCartItemTile(BuildContext context, WidgetRef ref, Product product) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       leading: ClipRRect(
@@ -144,7 +140,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 4),
-          _buildQuantityControls(context, product),
+          _buildQuantityControls(context, ref, product),
         ],
       ),
       trailing: Text(
@@ -154,7 +150,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  Widget _buildQuantityControls(BuildContext context, Product product) {
+  Widget _buildQuantityControls(BuildContext context, WidgetRef ref, Product product) {
     return Container(
       decoration: BoxDecoration(
         border: Border.all(color: Colors.grey.shade300),
@@ -168,9 +164,12 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             splashRadius: 20,
             onPressed: () {
               if (product.quantity > 1) {
-                _updateQuantity(product.id, product.quantity - 1);
+                ref.read(cartProvider.notifier).updateQuantity(
+                  product.id, 
+                  product.quantity - 1,
+                );
               } else {
-                _removeFromCart(product.id);
+                ref.read(cartProvider.notifier).removeFromCart(product.id);
               }
             },
           ),
@@ -182,52 +181,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
             icon: const Icon(Icons.add, size: 18),
             splashRadius: 20,
             onPressed: () {
-              _updateQuantity(product.id, product.quantity + 1);
+              ref.read(cartProvider.notifier).updateQuantity(
+                product.id, 
+                product.quantity + 1,
+              );
             },
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildNotSignedIn(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.shopping_cart_outlined,
-              size: 80,
-              color: Theme.of(context).colorScheme.secondary.withAlpha(25),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Please sign in to view your cart',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'Sign in to access your shopping cart across devices',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey,
-                  ),
-            ),
-            const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: () {
-                // Navigate to auth screen
-                // Navigator.push(context, MaterialPageRoute(builder: (_) => AuthScreen()));
-              },
-              child: const Text('Sign In'),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -361,48 +321,6 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  Future<void> _updateQuantity(String productId, int newQuantity) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('cart')
-        .doc(productId)
-        .update({'quantity': newQuantity});
-  }
-
-  Future<void> _removeFromCart(String productId) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('cart')
-        .doc(productId)
-        .delete();
-  }
-
-  Future<void> _clearCart() async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    final batch = _firestore.batch();
-    final cartItems = await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('cart')
-        .get();
-
-    for (var doc in cartItems.docs) {
-      batch.delete(doc.reference);
-    }
-
-    await batch.commit();
-  }
-
   Future<bool?> _showDeleteConfirmation(
       BuildContext context, String productName) async {
     return await showDialog<bool>(
@@ -427,7 +345,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
     );
   }
 
-  void _showUndoSnackbar(BuildContext context, Product product) {
+  void _showUndoSnackbar(BuildContext context, WidgetRef ref, Product product) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('${product.title} removed'),
@@ -435,30 +353,13 @@ class _CartScreenState extends ConsumerState<CartScreen> {
         action: SnackBarAction(
           label: 'UNDO',
           textColor: Theme.of(context).colorScheme.secondary,
-          onPressed: () => _addToCart(product),
+          onPressed: () => ref.read(cartProvider.notifier).addToCart(product),
         ),
       ),
     );
   }
 
-  Future<void> _addToCart(Product product) async {
-    final userId = _auth.currentUser?.uid;
-    if (userId == null) return;
-
-    await _firestore
-        .collection('users')
-        .doc(userId)
-        .collection('cart')
-        .doc(product.id)
-        .set({
-      'title': product.title,
-      'price': product.price,
-      'imageUrl': product.imageUrl,
-      'quantity': product.quantity,
-    });
-  }
-
-  void _showClearCartDialog(BuildContext context) {
+  void _showClearCartDialog(BuildContext context, WidgetRef ref) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -471,7 +372,7 @@ class _CartScreenState extends ConsumerState<CartScreen> {
           ),
           TextButton(
             onPressed: () {
-              _clearCart();
+              ref.read(cartProvider.notifier).clearCart();
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Cart cleared')),

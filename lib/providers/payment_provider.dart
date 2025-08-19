@@ -1,6 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 enum PaymentStatus { idle, processing, success, failed }
@@ -47,8 +45,6 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
   PaymentNotifier(this.ref) : super(const PaymentState());
   
   final Ref ref;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   Future<String> initializePayment({
     required double amount,
@@ -57,22 +53,23 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     try {
       state = const PaymentState(status: PaymentStatus.processing);
       
-      // In a real app, you would call your Firebase Cloud Function here
-      // that creates a Stripe PaymentIntent
-      final paymentIntent = await _callStripeFunction(
-        amount: amount,
-        currency: currency,
-      );
+      // Replace with your actual payment initialization logic
+      // This could be calling your backend API
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network call
+      
+      final mockPaymentIntent = {
+        'client_secret': 'pi_mock_${DateTime.now().millisecondsSinceEpoch}',
+        'amount': amount,
+        'currency': currency,
+      };
 
-      state = state.copyWith(
-        amount: amount,
-      );
+      state = state.copyWith(amount: amount);
 
-      return paymentIntent['client_secret'] as String;
+      return mockPaymentIntent['client_secret'] as String;
     } catch (e) {
       state = PaymentState(
         status: PaymentStatus.failed,
-        errorMessage: 'Failed to initialize payment: ${e.toString()}',
+        errorMessage: 'Payment initialization failed: ${e.toString()}',
       );
       rethrow;
     }
@@ -85,19 +82,9 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
     try {
       state = state.copyWith(status: PaymentStatus.processing);
       
-      final user = _auth.currentUser;
-      if (user == null) throw Exception('User not authenticated');
-
-      // Record payment in Firestore
-      await _firestore.collection('payments').doc(paymentIntentId).set({
-        'userId': user.uid,
-        'transactionId': paymentIntentId,
-        'amount': state.amount,
-        'method': paymentMethodType,
-        'status': 'completed',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      // Replace with your actual payment confirmation logic
+      // This could be calling your backend API
+      await Future.delayed(const Duration(seconds: 1)); // Simulate network call
 
       state = state.copyWith(
         status: PaymentStatus.success,
@@ -123,20 +110,6 @@ class PaymentNotifier extends StateNotifier<PaymentState> {
 
   void reset() {
     state = const PaymentState();
-  }
-
-  // Helper to call Firebase Cloud Function for Stripe
-  Future<Map<String, dynamic>> _callStripeFunction({
-    required double amount,
-    required String currency,
-  }) async {
-    // This would be replaced with your actual Firebase Cloud Function call
-    // For example using https://pub.dev/packages/firebase_functions
-    return {
-      'client_secret': 'pi_mock_secret_${DateTime.now().millisecondsSinceEpoch}',
-      'amount': amount,
-      'currency': currency,
-    };
   }
 }
 
@@ -164,15 +137,26 @@ final paymentMethodIconProvider = Provider.family<IconData, String?>((ref, metho
   }
 });
 
-// Payment history provider
-final paymentHistoryProvider = StreamProvider<List<DocumentSnapshot>>((ref) {
-  final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return Stream.value([]);
-
-  return FirebaseFirestore.instance
-      .collection('payments')
-      .where('userId', isEqualTo: user.uid)
-      .orderBy('createdAt', descending: true)
-      .snapshots()
-      .map((snapshot) => snapshot.docs);
+// Mock payment history provider
+final paymentHistoryProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  // Replace with your actual payment history source
+  return Stream.periodic(
+    const Duration(seconds: 2),
+    (_) => [
+      {
+        'transactionId': 'tx_${DateTime.now().millisecondsSinceEpoch}',
+        'amount': 29.99,
+        'method': 'card',
+        'status': 'completed',
+        'date': DateTime.now().subtract(const Duration(days: 1)),
+      },
+      {
+        'transactionId': 'tx_${DateTime.now().millisecondsSinceEpoch - 100000}',
+        'amount': 19.99,
+        'method': 'paypal',
+        'status': 'completed',
+        'date': DateTime.now().subtract(const Duration(days: 3)),
+      },
+    ],
+  );
 });

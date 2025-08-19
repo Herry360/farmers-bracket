@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Product {
   final String id;
   final String title;  // This is effectively the "name" of the product
@@ -21,12 +19,11 @@ class Product {
   final DateTime? harvestDate;
   final String? brand;
   final String? sku;
-  final DocumentReference? farmRef;
   final bool isOrganic;
 
   Product({
     required this.id,
-    required this.title,  // This is the required name parameter
+    required this.title,
     required this.imageUrl,
     required this.price,
     required this.description,
@@ -45,74 +42,12 @@ class Product {
     this.harvestDate,
     this.brand,
     this.sku,
-    this.farmRef,
     this.isOrganic = false,
   }) {
     assert(price >= 0, 'Price cannot be negative');
     assert(quantity >= 0, 'Quantity cannot be negative');
     assert(rating >= 0 && rating <= 5, 'Rating must be between 0 and 5');
   }
-
-  // ================== Firebase-Specific Methods ================== //
-
-  factory Product.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return Product(
-      id: doc.id,
-      title: data['title'] ?? '',
-      imageUrl: data['imageUrl'] ?? '',
-      price: (data['price'] ?? 0).toDouble(),
-      description: data['description'] ?? '',
-      category: data['category'] ?? '',
-      originalPrice: (data['originalPrice'] as num?)?.toDouble(),
-      isOnSale: data['isOnSale'] ?? false,
-      quantity: (data['quantity'] ?? 1).toInt(),
-      unit: data['unit'] ?? 'each',
-      weight: (data['weight'] as num?)?.toDouble(),
-      tags: data['tags'] != null ? List<String>.from(data['tags']) : null,
-      rating: (data['rating'] ?? 0).toDouble(),
-      reviewCount: (data['reviewCount'] ?? 0).toInt(),
-      farmId: data['farmId'] ?? '',
-      maxOrderQuantity: (data['maxOrderQuantity'] ?? 10).toInt(),
-      isAvailable: data['isAvailable'] ?? true,
-      harvestDate: (data['harvestDate'] as Timestamp?)?.toDate(),
-      brand: data['brand'],
-      sku: data['sku'],
-      farmRef: data['farmRef'],
-      isOrganic: data['isOrganic'] ?? false,
-    );
-  }
-
-  Map<String, dynamic> toFirestore() {
-    return {
-      'title': title,
-      'imageUrl': imageUrl,
-      'price': price,
-      'description': description,
-      'category': category,
-      'originalPrice': originalPrice,
-      'isOnSale': isOnSale,
-      'quantity': quantity,
-      'unit': unit,
-      'weight': weight,
-      'tags': tags,
-      'rating': rating,
-      'reviewCount': reviewCount,
-      'farmId': farmId,
-      'maxOrderQuantity': maxOrderQuantity,
-      'isAvailable': isAvailable,
-      'isOrganic': isOrganic,
-      'harvestDate': harvestDate != null ? Timestamp.fromDate(harvestDate!) : null,
-      'brand': brand,
-      'sku': sku,
-      'farmRef': farmRef ?? FirebaseFirestore.instance.collection('farms').doc(farmId),
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-  }
-
-  DocumentReference get firestoreRef =>
-      FirebaseFirestore.instance.collection('products').doc(id);
 
   // ================== Business Logic Methods ================== //
 
@@ -161,7 +96,6 @@ class Product {
     DateTime? harvestDate,
     String? brand,
     String? sku,
-    DocumentReference? farmRef,
     bool? isOrganic,
   }) {
     return Product(
@@ -185,7 +119,6 @@ class Product {
       harvestDate: harvestDate ?? this.harvestDate,
       brand: brand ?? this.brand,
       sku: sku ?? this.sku,
-      farmRef: farmRef ?? this.farmRef,
       isOrganic: isOrganic ?? this.isOrganic,
     );
   }
@@ -281,38 +214,30 @@ class Product {
         farmId: '',
       );
 
-  // ================== Firebase Query Helpers ================== //
-
-  static Query<Map<String, dynamic>> productsByFarmQuery(String farmId) {
-    return FirebaseFirestore.instance
-        .collection('products')
-        .where('farmId', isEqualTo: farmId)
-        .where('isAvailable', isEqualTo: true)
-        .orderBy('rating', descending: true);
+  /// Returns a mock Product for testing/demo purposes
+  static Product mock() {
+    return Product(
+      id: 'mock-id',
+      title: 'Mock Product',
+      imageUrl: 'https://via.placeholder.com/150',
+      price: 9.99,
+      description: 'This is a mock product for testing.',
+      category: 'Mock Category',
+      originalPrice: 14.99,
+      isOnSale: true,
+      quantity: 100,
+      unit: 'each',
+      weight: 1.5,
+      tags: ['mock', 'test'],
+      rating: 4.5,
+      reviewCount: 10,
+      farmId: 'mock-farm',
+      maxOrderQuantity: 5,
+      isAvailable: true,
+      harvestDate: DateTime.now().subtract(const Duration(days: 2)),
+      brand: 'MockBrand',
+      sku: 'MOCKSKU123',
+      isOrganic: false,
+    );
   }
-
-  static Query<Map<String, dynamic>> productsByCategoryQuery(String category) {
-    return FirebaseFirestore.instance
-        .collection('products')
-        .where('category', isEqualTo: category)
-        .where('isAvailable', isEqualTo: true)
-        .orderBy('rating', descending: true);
-  }
-
-  static Query<Map<String, dynamic>> onSaleProductsQuery() {
-    return FirebaseFirestore.instance
-        .collection('products')
-        .where('isOnSale', isEqualTo: true)
-        .where('isAvailable', isEqualTo: true)
-        .orderBy('rating', descending: true);
-  }
-}
-
-// Extension for Timestamp conversion
-extension DateTimeExtension on DateTime {
-  Timestamp toTimestamp() => Timestamp.fromDate(this);
-}
-
-extension TimestampExtension on Timestamp {
-  DateTime toDateTime() => toDate();
 }

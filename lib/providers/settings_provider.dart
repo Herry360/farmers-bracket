@@ -1,9 +1,5 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 
 // Settings state model
 class SettingsState {
@@ -18,7 +14,7 @@ class SettingsState {
     this.darkModeEnabled = false,
     this.isLoading = false,
     this.error,
-    this.syncWithCloud = true,
+    this.syncWithCloud = false, // Default to false since we removed Firebase
   });
 
   SettingsState copyWith({
@@ -42,8 +38,6 @@ class SettingsState {
 class SettingsNotifier extends StateNotifier<SettingsState> {
   final Ref ref;
   late SharedPreferences prefs;
-  final FirebaseRemoteConfig remoteConfig;
-  final FirebaseMessaging messaging;
   static const String _notificationsKey = 'notifications_enabled';
   static const String _darkModeKey = 'dark_mode_enabled';
   static const String _syncWithCloudKey = 'sync_with_cloud';
@@ -51,8 +45,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
   SettingsNotifier({
     required this.ref,
     required Future<SharedPreferences> prefsFuture,
-    required this.remoteConfig,
-    required this.messaging,
   }) : super(const SettingsState()) {
     _initializeSettings(prefsFuture);
   }
@@ -62,15 +54,10 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       state = state.copyWith(isLoading: true);
       prefs = await prefsFuture;
       
-      // Apply default settings from Firebase Remote Config first
-      await remoteConfig.fetchAndActivate();
-      final defaultDarkMode = remoteConfig.getBool('default_dark_mode');
-      final defaultNotifications = remoteConfig.getBool('default_notifications');
-
-      // Load settings from SharedPreferences, falling back to Remote Config defaults
-      final notificationsEnabled = prefs.getBool(_notificationsKey) ?? defaultNotifications;
-      final darkModeEnabled = prefs.getBool(_darkModeKey) ?? defaultDarkMode;
-      final syncWithCloud = prefs.getBool(_syncWithCloudKey) ?? true;
+      // Load settings from SharedPreferences
+      final notificationsEnabled = prefs.getBool(_notificationsKey) ?? true;
+      final darkModeEnabled = prefs.getBool(_darkModeKey) ?? false;
+      final syncWithCloud = prefs.getBool(_syncWithCloudKey) ?? false;
 
       state = SettingsState(
         notificationsEnabled: notificationsEnabled,
@@ -79,20 +66,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
         isLoading: false,
       );
 
-      // Initialize messaging subscription based on settings
-      if (notificationsEnabled) {
-        await messaging.subscribeToTopic('notifications');
-      }
-
-      // Sync with server if enabled
-      if (syncWithCloud) {
-        await _syncWithFirebase();
-      }
+      // Initialize app theme
+      ref.read(appThemeProvider.notifier).updateTheme(darkModeEnabled);
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
         error: 'Failed to load settings: ${e.toString()}',
-        syncWithCloud: false,
       );
     }
   }
@@ -101,18 +80,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     try {
       state = state.copyWith(isLoading: true);
       await prefs.setBool(_notificationsKey, value);
-      
-      // Update Firebase Messaging subscription
-      if (value) {
-        await messaging.subscribeToTopic('notifications');
-      } else {
-        await messaging.unsubscribeFromTopic('notifications');
-      }
-
-      // Sync with Firebase if enabled
-      if (state.syncWithCloud) {
-        await _updateFirebaseSettings();
-      }
 
       state = state.copyWith(
         notificationsEnabled: value,
@@ -134,11 +101,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       // Notify the app about theme change
       ref.read(appThemeProvider.notifier).updateTheme(value);
 
-      // Sync with Firebase if enabled
-      if (state.syncWithCloud) {
-        await _updateFirebaseSettings();
-      }
-
       state = state.copyWith(
         darkModeEnabled: value,
         isLoading: false,
@@ -155,10 +117,6 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     try {
       state = state.copyWith(isLoading: true);
       await prefs.setBool(_syncWithCloudKey, value);
-      
-      if (value) {
-        await _syncWithFirebase();
-      }
 
       state = state.copyWith(
         syncWithCloud: value,
@@ -172,54 +130,33 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     }
   }
 
-  Future<void> _syncWithFirebase() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
+  Future<void> resetToDefaults() async {
     try {
       state = state.copyWith(isLoading: true);
-      final doc = await FirebaseFirestore.instance
-          .collection('userSettings')
-          .doc(user.uid)
-          .get();
+      await prefs.remove(_notificationsKey);
+      await prefs.remove(_darkModeKey);
+      
+      // Reset to default values
+      final defaultDarkMode = false;
+      final defaultNotifications = true;
 
-      if (doc.exists) {
-        final data = doc.data()!;
-        await prefs.setBool(_notificationsKey, data['notificationsEnabled'] ?? state.notificationsEnabled);
-        await prefs.setBool(_darkModeKey, data['darkModeEnabled'] ?? state.darkModeEnabled);
+      await prefs.setBool(_notificationsKey, defaultNotifications);
+      await prefs.setBool(_darkModeKey, defaultDarkMode);
 
-        state = state.copyWith(
-          notificationsEnabled: data['notificationsEnabled'] ?? state.notificationsEnabled,
-          darkModeEnabled: data['darkModeEnabled'] ?? state.darkModeEnabled,
-          isLoading: false,
-        );
+      // Update app theme
+      ref.read(appThemeProvider.notifier).updateTheme(defaultDarkMode);
 
-        // Update app theme if changed
-        ref.read(appThemeProvider.notifier).updateTheme(data['darkModeEnabled'] ?? state.darkModeEnabled);
-      }
+      state = SettingsState(
+        notificationsEnabled: defaultNotifications,
+        darkModeEnabled: defaultDarkMode,
+        syncWithCloud: false,
+        isLoading: false,
+      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to sync settings with cloud: ${e.toString()}',
+        error: 'Failed to reset settings: ${e.toString()}',
       );
-    }
-  }
-
-  Future<void> _updateFirebaseSettings() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    try {
-      await FirebaseFirestore.instance
-          .collection('userSettings')
-          .doc(user.uid)
-          .set({
-            'notificationsEnabled': state.notificationsEnabled,
-            'darkModeEnabled': state.darkModeEnabled,
-            'lastUpdated': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to save settings to cloud: ${e.toString()}');
     }
   }
 }
@@ -228,34 +165,11 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>((ref) {
   return SettingsNotifier(
     ref: ref,
-    prefsFuture: ref.read(sharedPreferencesProvider.future),
-    remoteConfig: ref.read(remoteConfigProvider),
-    messaging: ref.read(firebaseMessagingProvider),
+    prefsFuture: SharedPreferences.getInstance(),
   );
 });
 
 // Supporting providers
-final sharedPreferencesProvider = FutureProvider<SharedPreferences>((ref) async {
-  return await SharedPreferences.getInstance();
-});
-
-final remoteConfigProvider = Provider<FirebaseRemoteConfig>((ref) {
-  final remoteConfig = FirebaseRemoteConfig.instance;
-  remoteConfig.setDefaults({
-    'default_dark_mode': false,
-    'default_notifications': true,
-  });
-  remoteConfig.setConfigSettings(RemoteConfigSettings(
-    fetchTimeout: const Duration(minutes: 1),
-    minimumFetchInterval: const Duration(hours: 1),
-  ));
-  return remoteConfig;
-});
-
-final firebaseMessagingProvider = Provider<FirebaseMessaging>((ref) {
-  return FirebaseMessaging.instance;
-});
-
 final appThemeProvider = StateNotifierProvider<AppThemeNotifier, bool>((ref) {
   return AppThemeNotifier(ref);
 });

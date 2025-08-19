@@ -1,13 +1,34 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
+
+// User model that would replace Firebase's User
+class AppUser {
+  final String uid;
+  final String? email;
+  final String? displayName;
+  final String? photoUrl;
+  final bool emailVerified;
+
+  const AppUser({
+    required this.uid,
+    this.email,
+    this.displayName,
+    this.photoUrl,
+    this.emailVerified = false,
+  });
+
+  factory AppUser.empty() {
+    return AppUser(uid: '');
+  }
+
+  bool get isAnonymous => uid.isEmpty;
+}
 
 // Auth state model
 class AuthState {
   final bool isAuthenticated;
-  final User? user;
+  final AppUser? user;
   final bool isLoading;
   final String? error;
 
@@ -20,7 +41,7 @@ class AuthState {
 
   AuthState copyWith({
     bool? isAuthenticated,
-    User? user,
+    AppUser? user,
     bool? isLoading,
     String? error,
   }) {
@@ -34,7 +55,7 @@ class AuthState {
 
   Widget when({
     required Widget Function() loading,
-    required Widget Function(User user) authenticated,
+    required Widget Function(AppUser user) authenticated,
     required Widget Function() unauthenticated,
     required Widget Function(String error) error,
   }) {
@@ -50,25 +71,88 @@ class AuthState {
   }
 }
 
-// Auth notifier - using Firebase
+// Abstract authentication service
+abstract class AuthService {
+  Future<AppUser?> getCurrentUser();
+  Future<AppUser?> login(String email, String password);
+  Future<void> logout();
+  Future<AppUser?> register(String email, String password, Map<String, dynamic> userMetadata);
+  Future<void> resetPassword(String email);
+}
+
+// Mock authentication service for UI development
+class MockAuthService implements AuthService {
+  @override
+  Future<AppUser?> getCurrentUser() async {
+    // Simulate network delay
+    await Future.delayed(const Duration(seconds: 1));
+    // Return null for unauthenticated state
+    // return null;
+    // Or return a mock user for authenticated state
+    return const AppUser(
+      uid: 'mock_uid_123',
+      email: 'mock@example.com',
+      displayName: 'Mock User',
+      photoUrl: 'https://example.com/avatar.jpg',
+      emailVerified: true,
+    );
+  }
+
+  @override
+  Future<AppUser?> login(String email, String password) async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (email == 'test@example.com' && password == 'password') {
+      return const AppUser(
+        uid: 'mock_uid_123',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        emailVerified: true,
+      );
+    } else {
+      throw Exception('Invalid email or password');
+    }
+  }
+
+  @override
+  Future<void> logout() async {
+    await Future.delayed(const Duration(seconds: 1));
+  }
+
+  @override
+  Future<AppUser?> register(String email, String password, Map<String, dynamic> userMetadata) async {
+    await Future.delayed(const Duration(seconds: 2));
+    return AppUser(
+      uid: 'new_user_${DateTime.now().millisecondsSinceEpoch}',
+      email: email,
+      displayName: userMetadata['name'],
+      photoUrl: userMetadata['avatar_url'],
+    );
+  }
+
+  @override
+  Future<void> resetPassword(String email) async {
+    await Future.delayed(const Duration(seconds: 1));
+    if (!email.contains('@')) {
+      throw Exception('Invalid email address');
+    }
+  }
+}
+
+// Auth notifier - now using abstract AuthService
 class AuthNotifier extends StateNotifier<AuthState> {
   final Ref ref;
-  final FirebaseAuth _auth;
+  final AuthService _authService;
 
-  AuthNotifier(this.ref) 
-    : _auth = FirebaseAuth.instance,
-      super(const AuthState(isAuthenticated: false)) {
+  AuthNotifier(this.ref, {AuthService? authService})
+      : _authService = authService ?? MockAuthService(),
+        super(const AuthState(isAuthenticated: false)) {
     _initializeAuth();
   }
 
   Future<void> _initializeAuth() async {
     state = state.copyWith(isLoading: true);
     try {
-      // Initialize Firebase if not already initialized
-      await Firebase.initializeApp();
-
-      // Get initial auth state
-      final user = _auth.currentUser;
+      final user = await _authService.getCurrentUser();
 
       if (user != null) {
         state = AuthState(
@@ -79,19 +163,6 @@ class AuthNotifier extends StateNotifier<AuthState> {
       } else {
         state = const AuthState(isAuthenticated: false, isLoading: false);
       }
-
-      // Listen for auth state changes
-      _auth.authStateChanges().listen((User? user) {
-        if (user != null) {
-          state = AuthState(
-            isAuthenticated: true,
-            user: user,
-            isLoading: false,
-          );
-        } else {
-          state = const AuthState(isAuthenticated: false, isLoading: false);
-        }
-      });
     } catch (e) {
       state = AuthState(
         isAuthenticated: false,
@@ -104,15 +175,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> login({required String email, required String password}) async {
     try {
       state = state.copyWith(isLoading: true);
-      final userCredential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final user = await _authService.login(email, password);
       
-      if (userCredential.user != null) {
+      if (user != null) {
         state = AuthState(
           isAuthenticated: true,
-          user: userCredential.user,
+          user: user,
           isLoading: false,
         );
       } else {
@@ -121,15 +189,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
           error: 'Login failed. Please try again.',
         );
       }
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: _getFirebaseAuthErrorMessage(e),
-      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'An unexpected error occurred',
+        error: _getAuthErrorMessage(e),
       );
     }
   }
@@ -137,7 +200,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> logout() async {
     try {
       state = state.copyWith(isLoading: true);
-      await _auth.signOut();
+      await _authService.logout();
       state = const AuthState(isAuthenticated: false, isLoading: false);
     } catch (e) {
       state = state.copyWith(
@@ -154,19 +217,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     try {
       state = state.copyWith(isLoading: true);
-      final userCredential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      final user = await _authService.register(email, password, userMetadata);
 
-      if (userCredential.user != null) {
-        // Update user profile with metadata
-        await userCredential.user?.updateDisplayName(userMetadata['name']);
-        await userCredential.user?.updatePhotoURL(userMetadata['avatar_url']);
-        
+      if (user != null) {
         state = AuthState(
           isAuthenticated: true,
-          user: userCredential.user,
+          user: user,
           isLoading: false,
         );
       } else {
@@ -175,15 +231,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
           error: 'Registration failed. Please try again.',
         );
       }
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: _getFirebaseAuthErrorMessage(e),
-      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'An unexpected error occurred',
+        error: _getAuthErrorMessage(e),
       );
     }
   }
@@ -191,41 +242,33 @@ class AuthNotifier extends StateNotifier<AuthState> {
   Future<void> resetPassword(String email) async {
     try {
       state = state.copyWith(isLoading: true);
-      await _auth.sendPasswordResetEmail(email: email);
+      await _authService.resetPassword(email);
       state = state.copyWith(
         isLoading: false,
         error: 'Password reset email sent to $email',
       );
-    } on FirebaseAuthException catch (e) {
-      state = state.copyWith(
-        isLoading: false,
-        error: _getFirebaseAuthErrorMessage(e),
-      );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to send password reset email',
+        error: _getAuthErrorMessage(e),
       );
     }
   }
 
-  String _getFirebaseAuthErrorMessage(FirebaseAuthException e) {
-    switch (e.code) {
-      case 'user-not-found':
-        return 'No user found with this email';
-      case 'wrong-password':
-        return 'Incorrect password';
-      case 'invalid-email':
-        return 'Invalid email address';
-      case 'email-already-in-use':
-        return 'Email already in use';
-      case 'weak-password':
-        return 'Password is too weak';
-      case 'too-many-requests':
-        return 'Too many requests. Try again later';
-      default:
-        return e.message ?? 'Authentication failed';
+  String _getAuthErrorMessage(dynamic e) {
+    final error = e.toString();
+    if (error.contains('Invalid email or password')) {
+      return 'Invalid email or password';
+    } else if (error.contains('Invalid email address')) {
+      return 'Invalid email address';
+    } else if (error.contains('already in use')) {
+      return 'Email already in use';
+    } else if (error.contains('too weak')) {
+      return 'Password is too weak';
+    } else if (error.contains('too many requests')) {
+      return 'Too many requests. Try again later';
     }
+    return 'Authentication failed';
   }
 }
 

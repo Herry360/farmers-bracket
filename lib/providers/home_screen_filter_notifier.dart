@@ -1,5 +1,6 @@
+import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 enum SortOption { distance, rating, name }
 
@@ -11,7 +12,7 @@ class HomeScreenFilterState {
   final double maxDistance; // in kilometers
   final bool showFavoritesOnly;
   final SortOption sortOption;
-  final GeoPoint? userLocation;
+  final Map<String, double>? userLocation; // Using lat/lng map instead of GeoPoint
 
   const HomeScreenFilterState({
     this.category = 'All',
@@ -32,7 +33,7 @@ class HomeScreenFilterState {
     double? maxDistance,
     bool? showFavoritesOnly,
     SortOption? sortOption,
-    GeoPoint? userLocation,
+    Map<String, double>? userLocation,
   }) {
     return HomeScreenFilterState(
       category: category ?? this.category,
@@ -49,8 +50,6 @@ class HomeScreenFilterState {
 
 class HomeScreenFilterNotifier extends StateNotifier<HomeScreenFilterState> {
   HomeScreenFilterNotifier() : super(const HomeScreenFilterState());
-
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   void resetFilters() {
     state = const HomeScreenFilterState();
@@ -76,8 +75,10 @@ class HomeScreenFilterNotifier extends StateNotifier<HomeScreenFilterState> {
     state = state.copyWith(maxDistance: distance);
   }
 
-  void setUserLocation(GeoPoint location) {
-    state = state.copyWith(userLocation: location);
+  void setUserLocation(double latitude, double longitude) {
+    state = state.copyWith(
+      userLocation: {'lat': latitude, 'lng': longitude},
+    );
   }
 
   void toggleFavorites() {
@@ -86,61 +87,6 @@ class HomeScreenFilterNotifier extends StateNotifier<HomeScreenFilterState> {
 
   void setSortOption(SortOption option) {
     state = state.copyWith(sortOption: option);
-  }
-
-  // Generate Firestore query based on current filters
-  Query<Map<String, dynamic>> buildQuery() {
-    Query<Map<String, dynamic>> query = _firestore.collection('farms');
-
-    // Apply category filter
-    if (state.category != 'All') {
-      query = query.where('category', isEqualTo: state.category);
-    }
-
-    // Apply rating filter
-    if (state.rating != 'All') {
-      final minRating = double.parse(state.rating);
-      query = query.where('rating', isGreaterThanOrEqualTo: minRating);
-    }
-
-    // Apply favorites filter (requires user context)
-    if (state.showFavoritesOnly) {
-      query = query.where('isFavorite', isEqualTo: true);
-    }
-
-    // Apply location/distance filter if user location is available
-    if (state.userLocation != null && state.maxDistance < 10000) {
-      final center = state.userLocation!;
-      final radius = state.maxDistance;
-      final precision = _calculateGeoHashPrecision(radius);
-      
-      // Get the geohash prefix based on the desired precision
-      final geoHashPrefix = _getGeoHashPrefix(center, precision);
-      
-      query = query
-          .where('geohash', isGreaterThanOrEqualTo: geoHashPrefix)
-          .where('geohash', isLessThanOrEqualTo: '$geoHashPrefix~');
-    }
-
-    // Apply sorting
-    switch (state.sortOption) {
-      case SortOption.distance:
-        if (state.userLocation != null) {
-          // Note: For actual distance sorting, you'll need to calculate distances client-side
-          query = query.orderBy('geohash');
-        } else {
-          query = query.orderBy('name');
-        }
-        break;
-      case SortOption.rating:
-        query = query.orderBy('rating', descending: true);
-        break;
-      case SortOption.name:
-        query = query.orderBy('name');
-        break;
-    }
-
-    return query;
   }
 
   // Helper method to calculate appropriate geohash precision based on distance
@@ -153,11 +99,90 @@ class HomeScreenFilterNotifier extends StateNotifier<HomeScreenFilterState> {
     return 1;
   }
 
-  // Simplified geohash prefix calculation (in a real app, use a proper geohash library)
-  String _getGeoHashPrefix(GeoPoint point, int precision) {
-    // This is a simplified version - in production, use a proper geohash algorithm
-    // For demo purposes, we'll just return a fixed-length string
-    return 'drm3b'; // This should be replaced with actual geohash calculation
+  // Filter a list of items locally (replace with your actual data model)
+  List<Map<String, dynamic>> applyFilters(List<Map<String, dynamic>> items) {
+    return items.where((item) {
+      // Apply category filter
+      if (state.category != 'All' && item['category'] != state.category) {
+        return false;
+      }
+
+      // Apply rating filter
+      if (state.rating != 'All') {
+        final minRating = double.parse(state.rating);
+        if ((item['rating'] ?? 0.0) < minRating) {
+          return false;
+        }
+      }
+
+      // Apply search query filter
+      if (state.searchQuery.isNotEmpty) {
+        final name = item['name']?.toString().toLowerCase() ?? '';
+        if (!name.contains(state.searchQuery.toLowerCase())) {
+          return false;
+        }
+      }
+
+      // Apply location filter
+      if (state.location != 'All' && item['location'] != state.location) {
+        return false;
+      }
+
+      // Apply distance filter if user location is available
+      if (state.userLocation != null && item['coordinates'] != null) {
+        final distance = _calculateDistance(
+          state.userLocation!['lat']!,
+          state.userLocation!['lng']!,
+          item['coordinates']['lat'],
+          item['coordinates']['lng'],
+        );
+        if (distance > state.maxDistance) {
+          return false;
+        }
+      }
+
+      // Apply favorites filter
+      if (state.showFavoritesOnly && !(item['isFavorite'] ?? false)) {
+        return false;
+      }
+
+      return true;
+    }).toList()
+      ..sort((a, b) {
+        // Apply sorting
+        switch (state.sortOption) {
+          case SortOption.distance:
+            if (state.userLocation != null && a['coordinates'] != null && b['coordinates'] != null) {
+              final distanceA = _calculateDistance(
+                state.userLocation!['lat']!,
+                state.userLocation!['lng']!,
+                a['coordinates']['lat'],
+                a['coordinates']['lng'],
+              );
+              final distanceB = _calculateDistance(
+                state.userLocation!['lat']!,
+                state.userLocation!['lng']!,
+                b['coordinates']['lat'],
+                b['coordinates']['lng'],
+              );
+              return distanceA.compareTo(distanceB);
+            }
+            return (a['name'] ?? '').compareTo(b['name'] ?? '');
+          case SortOption.rating:
+            return (b['rating'] ?? 0.0).compareTo(a['rating'] ?? 0.0);
+          case SortOption.name:
+            return (a['name'] ?? '').compareTo(b['name'] ?? '');
+        }
+      });
+  }
+
+  // Haversine formula to calculate distance between two coordinates
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const p = 0.017453292519943295; // Math.PI / 180
+    final a = 0.5 - 
+        cos((lat2 - lat1) * p) / 2 +
+        cos(lat1 * p) * cos(lat2 * p) * (1 - cos((lon2 - lon1) * p)) / 2;
+    return 12742 * asin(sqrt(a)); // 2 * R; R = 6371 km
   }
 }
 
@@ -166,11 +191,23 @@ final filterProvider = StateNotifierProvider<HomeScreenFilterNotifier, HomeScree
   (ref) => HomeScreenFilterNotifier(),
 );
 
-final filteredFarmsProvider = Provider<Query<Map<String, dynamic>>>((ref) {
-  return ref.read(filterProvider.notifier).buildQuery();
-});
-
-final filteredFarmsStreamProvider = StreamProvider<List<DocumentSnapshot>>((ref) {
-  final query = ref.watch(filteredFarmsProvider);
-  return query.snapshots().map((snapshot) => snapshot.docs);
+// Example usage with mock data
+final filteredItemsProvider = Provider<List<Map<String, dynamic>>>((ref) {
+  // final filters = ref.watch(filterProvider);
+  final notifier = ref.read(filterProvider.notifier);
+  
+  // Replace with your actual data source
+  final mockItems = [
+    {
+      'name': 'Organic Farm',
+      'category': 'Organic',
+      'rating': 4.5,
+      'location': 'North',
+      'coordinates': {'lat': 37.7749, 'lng': -122.4194},
+      'isFavorite': true,
+    },
+    // Add more mock items as needed
+  ];
+  
+  return notifier.applyFilters(mockItems);
 });

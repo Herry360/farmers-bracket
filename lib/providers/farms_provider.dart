@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/farm.dart' as farm_model;
 
 class FarmsNotifier extends StateNotifier<AsyncValue<List<farm_model.Farm>>> {
@@ -7,15 +6,27 @@ class FarmsNotifier extends StateNotifier<AsyncValue<List<farm_model.Farm>>> {
     loadFarms();
   }
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   Future<void> loadFarms() async {
     state = const AsyncValue.loading();
     try {
-      final snapshot = await _firestore.collection('farms').get();
-      final farms = snapshot.docs
-          .map((doc) => farm_model.Farm.fromFirestore(doc))
-          .toList();
+      // Replace with your actual data loading logic
+      // This could be from an API, local database, or mock data
+      await Future.delayed(const Duration(milliseconds: 500)); // Simulate network delay
+      
+      // Example mock data - replace with your actual data source
+      final farms = [
+        farm_model.Farm(
+          id: '1',
+          name: 'Example Farm',
+          description: 'A beautiful organic farm',
+          imageUrl: 'https://example.com/farm.jpg',
+          category: 'Organic',
+          isFavorite: false, rating: 0.0, distance: 0.0, location: '', products: [],
+          // Add other required fields
+        ),
+        // Add more farms as needed
+      ];
+      
       state = AsyncValue.data(farms);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -27,24 +38,32 @@ class FarmsNotifier extends StateNotifier<AsyncValue<List<farm_model.Farm>>> {
   }
 
   Future<void> toggleFavorite(String farmId, bool isFavorite) async {
-    state.whenData((farms) async {
-      try {
-        await _firestore.collection('farms').doc(farmId).update({
-          'isFavorite': isFavorite,
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-        
-        // Update local state
-        state = AsyncValue.data(farms.map((farm) {
+    state = state.whenData((farms) {
+      return farms.map((farm) {
+        if (farm.id == farmId) {
+          return farm.copyWith(isFavorite: isFavorite);
+        }
+        return farm;
+      }).toList();
+    });
+
+    // Here you would typically persist the favorite status
+    // to your backend or local storage
+    try {
+      await Future.delayed(const Duration(milliseconds: 200)); // Simulate API call
+      print('Favorite status updated for farm $farmId: $isFavorite');
+    } catch (e) {
+      // Revert the change if the persistence fails
+      state = state.whenData((farms) {
+        return farms.map((farm) {
           if (farm.id == farmId) {
-            return farm.copyWith(isFavorite: isFavorite);
+            return farm.copyWith(isFavorite: !isFavorite); // Revert
           }
           return farm;
-        }).toList());
-      } catch (e, st) {
-        state = AsyncValue.error(e, st);
-      }
-    });
+        }).toList();
+      });
+      rethrow;
+    }
   }
 }
 
@@ -69,10 +88,22 @@ final farmsByCategoryProvider = Provider.family<List<farm_model.Farm>, String>((
   );
 });
 
-final farmStreamProvider = StreamProvider.family<farm_model.Farm?, String>((ref, farmId) {
-  return FirebaseFirestore.instance
-      .collection('farms')
-      .doc(farmId)
-      .snapshots()
-      .map((snap) => snap.exists ? farm_model.Farm.fromFirestore(snap) : null);
+// For the stream provider, you can implement a mock version if needed
+final farmStreamProvider = StreamProvider.family<farm_model.Farm?, String>((ref, farmId) async* {
+  // This is a mock stream implementation
+  // Replace with your actual stream source if needed
+  yield null; // Initial value
+  
+  await Future.delayed(const Duration(milliseconds: 300));
+  
+  // Example mock farm data
+  yield farm_model.Farm(
+    id: farmId,
+    name: 'Streamed Farm',
+    description: 'Farm data from stream',
+    imageUrl: 'https://example.com/farm.jpg',
+    category: 'Streamed',
+    isFavorite: false, rating: 0.0, distance: 0.0, location: '', products: [],
+    // Add other required fields
+  );
 });

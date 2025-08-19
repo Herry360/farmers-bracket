@@ -1,17 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-// Review Model
 class Review {
   final String id;
   final String itemName;
   final double rating;
   final String comment;
   final DateTime date;
-  final String userId;
 
   Review({
     required this.id,
@@ -19,341 +14,168 @@ class Review {
     required this.rating,
     required this.comment,
     required this.date,
-    required this.userId,
   });
-
-  factory Review.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return Review(
-      id: doc.id,
-      itemName: data['itemName'] ?? '',
-      rating: (data['rating'] ?? 0).toDouble(),
-      comment: data['comment'] ?? '',
-      date: (data['date'] as Timestamp).toDate(),
-      userId: data['userId'] ?? '',
-    );
-  }
-
-  Map<String, dynamic> toMap() {
-    return {
-      'itemName': itemName,
-      'rating': rating,
-      'comment': comment,
-      'date': Timestamp.fromDate(date),
-      'userId': userId,
-    };
-  }
 
   String get formattedDate => DateFormat('MMM dd, yyyy').format(date);
   String get starRating => '★' * rating.floor() + '☆' * (5 - rating.floor());
 }
 
-// Review Provider
-final reviewsProvider = StreamProvider.autoDispose<List<Review>>((ref) {
-  final userId = FirebaseAuth.instance.currentUser?.uid;
-  if (userId == null) return const Stream.empty();
-
-  return FirebaseFirestore.instance
-      .collection('reviews')
-      .where('userId', isEqualTo: userId)
-      .orderBy('date', descending: true)
-      .snapshots()
-      .map((snapshot) => snapshot.docs.map(Review.fromFirestore).toList());
-});
-
-class ReviewsScreen extends ConsumerWidget {
+class ReviewsScreen extends StatefulWidget {
   const ReviewsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final reviewsAsync = ref.watch(reviewsProvider);
+  State<ReviewsScreen> createState() => _ReviewsScreenState();
+}
+
+class _ReviewsScreenState extends State<ReviewsScreen> {
+  final List<Review> _reviews = [];
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviews();
+  }
+
+  Future<void> _loadReviews() async {
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
+    
+    // Sample data - replace with your actual data source
+    setState(() {
+      _reviews.addAll([
+        Review(
+          id: '1',
+          itemName: 'Organic Apples',
+          rating: 4.5,
+          comment: 'Very fresh and tasty! Will buy again.',
+          date: DateTime.now().subtract(const Duration(days: 2)),
+        ),
+        Review(
+          id: '2',
+          itemName: 'Farm Fresh Eggs',
+          rating: 5.0,
+          comment: 'The best eggs I\'ve ever had. Perfect for breakfast.',
+          date: DateTime.now().subtract(const Duration(days: 5)),
+        ),
+        Review(
+          id: '3',
+          itemName: 'Homemade Bread',
+          rating: 3.5,
+          comment: 'Good flavor but a bit dense. Would prefer softer texture.',
+          date: DateTime.now().subtract(const Duration(days: 10)),
+        ),
+      ]);
+      _isLoading = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+  // final colorScheme = theme.colorScheme; // Removed unused variable
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Reviews'),
+        centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showAddReviewDialog(context, ref),
+            onPressed: _showAddReviewDialog,
             tooltip: 'Add Review',
           ),
         ],
       ),
-      body: reviewsAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 48, color: Colors.red),
-              const SizedBox(height: 16),
-              Text('Error loading reviews', 
-                  style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: 8),
-              Text(error.toString(), textAlign: TextAlign.center),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => ref.refresh(reviewsProvider),
-                child: const Text('Retry'),
-              ),
-            ],
-          ),
-        ),
-        data: (reviews) {
-          if (reviews.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.reviews, size: 64, color: Colors.grey),
-                  const SizedBox(height: 16),
-                  Text('No reviews yet', 
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  const Text('Your reviews will appear here'),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => _showAddReviewDialog(context, ref),
-                    child: const Text('Add Your First Review'),
+      body: _isLoading && _reviews.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : _reviews.isEmpty
+              ? _buildEmptyState(theme)
+              : RefreshIndicator(
+                  onRefresh: _loadReviews,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _reviews.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 16),
+                    itemBuilder: (context, index) {
+                      final review = _reviews[index];
+                      return _ReviewCard(
+                        review: review,
+                        onDelete: () => _deleteReview(review.id),
+                        onEdit: () => _showEditReviewDialog(review),
+                      );
+                    },
                   ),
-                ],
-              ),
-            );
-          }
+                ),
+    );
+  }
 
-          return RefreshIndicator(
-            onRefresh: () => ref.refresh(reviewsProvider as Refreshable<Future<void>>),
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: reviews.length,
-              separatorBuilder: (context, index) => const Divider(height: 24),
-              itemBuilder: (context, index) {
-                final review = reviews[index];
-                return _ReviewCard(
-                  review: review,
-                  onDelete: () => _deleteReview(context, ref, review.id),
-                  onEdit: () => _showEditReviewDialog(context, ref, review),
-                );
-              },
+  Widget _buildEmptyState(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.reviews, size: 64, color: theme.colorScheme.outline),
+          const SizedBox(height: 16),
+          Text(
+            'No reviews yet',
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.8),
             ),
-          );
-        },
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Your reviews will appear here',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.6),
+            ),
+          ),
+          const SizedBox(height: 16),
+          ElevatedButton(
+            onPressed: _showAddReviewDialog,
+            child: const Text('Add Your First Review'),
+          ),
+        ],
       ),
     );
   }
 
-  Future<void> _showAddReviewDialog(BuildContext context, WidgetRef ref) async {
-    final formKey = GlobalKey<FormState>();
-    final itemController = TextEditingController();
-    final commentController = TextEditingController();
-    double rating = 3.0;
-
-    await showDialog(
+  Future<void> _showAddReviewDialog() async {
+    final result = await showModalBottomSheet<Review>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add New Review'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: itemController,
-                    decoration: const InputDecoration(
-                      labelText: 'Item Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) => 
-                        value?.isEmpty ?? true ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Text('Rating:'),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Slider(
-                          value: rating,
-                          min: 1,
-                          max: 5,
-                          divisions: 4,
-                          label: rating.toStringAsFixed(1),
-                          onChanged: (value) => rating = value,
-                        ),
-                      ),
-                      Text(rating.toStringAsFixed(1)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: commentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Comment',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                    validator: (value) => 
-                        value?.isEmpty ?? true ? 'Required' : null,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  final userId = FirebaseAuth.instance.currentUser?.uid;
-                  if (userId == null) return;
-
-                  try {
-                    await FirebaseFirestore.instance.collection('reviews').add({
-                      'itemName': itemController.text,
-                      'rating': rating,
-                      'comment': commentController.text,
-                      'date': Timestamp.now(),
-                      'userId': userId,
-                    });
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Review added successfully')),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: ${e.toString()}')),
-                      );
-                    }
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
+      isScrollControlled: true,
+      builder: (context) => const _ReviewFormSheet(),
     );
+
+    if (result != null && mounted) {
+      setState(() => _reviews.insert(0, result));
+    }
   }
 
-  Future<void> _showEditReviewDialog(
-    BuildContext context, 
-    WidgetRef ref, 
-    Review review,
-  ) async {
-    final formKey = GlobalKey<FormState>();
-    final itemController = TextEditingController(text: review.itemName);
-    final commentController = TextEditingController(text: review.comment);
-    double rating = review.rating;
-
-    await showDialog(
+  Future<void> _showEditReviewDialog(Review review) async {
+    final result = await showModalBottomSheet<Review>(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit Review'),
-          content: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: itemController,
-                    decoration: const InputDecoration(
-                      labelText: 'Item Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) => 
-                        value?.isEmpty ?? true ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Text('Rating:'),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Slider(
-                          value: rating,
-                          min: 1,
-                          max: 5,
-                          divisions: 4,
-                          label: rating.toStringAsFixed(1),
-                          onChanged: (value) => rating = value,
-                        ),
-                      ),
-                      Text(rating.toStringAsFixed(1)),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: commentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Comment',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                    validator: (value) => 
-                        value?.isEmpty ?? true ? 'Required' : null,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  try {
-                    await FirebaseFirestore.instance
-                        .collection('reviews')
-                        .doc(review.id)
-                        .update({
-                      'itemName': itemController.text,
-                      'rating': rating,
-                      'comment': commentController.text,
-                    });
-                    if (context.mounted) {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Review updated successfully')),
-                      );
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text('Error: ${e.toString()}')),
-                      );
-                    }
-                  }
-                }
-              },
-              child: const Text('Update'),
-            ),
-          ],
-        );
-      },
+      isScrollControlled: true,
+      builder: (context) => _ReviewFormSheet(review: review),
     );
+
+    if (result != null && mounted) {
+      setState(() {
+        final index = _reviews.indexWhere((r) => r.id == review.id);
+        if (index != -1) {
+          _reviews[index] = result;
+        }
+      });
+    }
   }
 
-  Future<void> _deleteReview(
-    BuildContext context, 
-    WidgetRef ref, 
-    String reviewId,
-  ) async {
+  Future<void> _deleteReview(String reviewId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
         title: const Text('Delete Review'),
         content: const Text('Are you sure you want to delete this review?'),
         actions: [
@@ -363,30 +185,23 @@ class ReviewsScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
           ),
         ],
       ),
     );
 
-    if (confirmed == true) {
-      try {
-        await FirebaseFirestore.instance
-            .collection('reviews')
-            .doc(reviewId)
-            .delete();
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Review deleted successfully')),
-          );
-        }
-      } catch (e) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${e.toString()}')),
-          );
-        }
-      }
+    if (confirmed == true && mounted) {
+      setState(() => _reviews.removeWhere((r) => r.id == reviewId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Review deleted'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 }
@@ -408,9 +223,13 @@ class _ReviewCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Card(
-      elevation: 2,
+      elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: colorScheme.outlineVariant,
+          width: 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -481,5 +300,171 @@ class _ReviewCard extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class _ReviewFormSheet extends StatefulWidget {
+  final Review? review;
+
+  const _ReviewFormSheet({this.review});
+
+  @override
+  State<_ReviewFormSheet> createState() => _ReviewFormSheetState();
+}
+
+class _ReviewFormSheetState extends State<_ReviewFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _itemController;
+  late final TextEditingController _commentController;
+  late double _rating;
+
+  @override
+  void initState() {
+    super.initState();
+    _itemController = TextEditingController(text: widget.review?.itemName ?? '');
+    _commentController = TextEditingController(text: widget.review?.comment ?? '');
+    _rating = widget.review?.rating ?? 3.0;
+  }
+
+  @override
+  void dispose() {
+    _itemController.dispose();
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isEditing = widget.review != null;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.outline.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            Text(
+              isEditing ? 'Edit Review' : 'Add Review',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 24),
+            TextFormField(
+              controller: _itemController,
+              decoration: InputDecoration(
+                labelText: 'Item Name',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.2),
+              ),
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Text('Rating:', style: theme.textTheme.bodyMedium),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Slider(
+                    value: _rating,
+                    min: 1,
+                    max: 5,
+                    divisions: 4,
+                    label: _rating.toStringAsFixed(1),
+                    onChanged: (value) => setState(() => _rating = value),
+                    activeColor: Colors.amber,
+                  ),
+                ),
+                Text(
+                  _rating.toStringAsFixed(1),
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _commentController,
+              decoration: InputDecoration(
+                labelText: 'Comment',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.2),
+              ),
+              maxLines: 3,
+              validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submitForm,
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(isEditing ? 'Update' : 'Save'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _submitForm() {
+    if (_formKey.currentState!.validate()) {
+      final review = Review(
+        id: widget.review?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        itemName: _itemController.text,
+        rating: _rating,
+        comment: _commentController.text,
+        date: widget.review?.date ?? DateTime.now(),
+      );
+      Navigator.pop(context, review);
+    }
   }
 }

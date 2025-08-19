@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/product.dart';
 
 typedef CartErrorCallback = void Function(String errorMessage, [Product? product]);
@@ -13,8 +11,6 @@ class CartData {
   factory CartData() => _instance;
   CartData._internal();
 
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
   final List<Product> _cartItems = [];
   final List<Product> _favoriteItems = [];
   final List<VoidCallback> _listeners = [];
@@ -72,117 +68,11 @@ class CartData {
     }
   }
 
-  // ================== Database Operations ================== //
-
-  Future<void> initialize() async {
-    await _loadCartItems();
-    await _loadFavorites();
-  }
-
-  Future<void> _loadCartItems() async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      final querySnapshot = await _firestore
-          .collection('userCarts')
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      _cartItems.clear();
-      for (final doc in querySnapshot.docs) {
-        final product = Product.fromFirestore(
-          await _firestore.collection('products').doc(doc['productId']).get()
-        );
-        _cartItems.add(product.copyWith(quantity: doc['quantity']));
-      }
-      _notifyListeners();
-    } catch (e) {
-      _notifyError('Failed to load cart: ${e.toString()}');
-      rethrow;
-    }
-  }
-
-  Future<void> _loadFavorites() async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      final querySnapshot = await _firestore
-          .collection('userFavorites')
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      _favoriteItems.clear();
-      for (final doc in querySnapshot.docs) {
-        _favoriteItems.add(
-          Product.fromFirestore(
-            await _firestore.collection('products').doc(doc['productId']).get()
-          )
-        );
-      }
-      _notifyListeners();
-    } catch (e) {
-      _notifyError('Failed to load favorites: ${e.toString()}');
-    }
-  }
-
-  Future<void> _saveCartItem(Product product) async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      await _firestore.collection('userCarts').doc('${userId}_${product.id}').set({
-        'userId': userId,
-        'productId': product.id,
-        'quantity': product.quantity,
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      _notifyError('Failed to save cart item: ${e.toString()}');
-      rethrow;
-    }
-  }
-
-  Future<void> _removeCartItem(String productId) async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      await _firestore.collection('userCarts').doc('${userId}_$productId').delete();
-    } catch (e) {
-      _notifyError('Failed to remove cart item: ${e.toString()}');
-      rethrow;
-    }
-  }
-
-  Future<void> _clearCartInDatabase() async {
-    try {
-      final userId = _auth.currentUser?.uid;
-      if (userId == null) return;
-
-      final batch = _firestore.batch();
-      final querySnapshot = await _firestore
-          .collection('userCarts')
-          .where('userId', isEqualTo: userId)
-          .get();
-
-      for (final doc in querySnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      await batch.commit();
-    } catch (e) {
-      _notifyError('Failed to clear cart: ${e.toString()}');
-      rethrow;
-    }
-  }
-
   // ================== Cart Item Management ================== //
 
   List<Product> get cartItems => List.unmodifiable(_cartItems);
   
-  Future<void> addToCart(Product product, {int quantity = 1}) async {
+  void addToCart(Product product, {int quantity = 1}) {
     try {
       if (quantity <= 0) {
         throw ArgumentError('Quantity must be positive');
@@ -199,7 +89,6 @@ class CartData {
         _cartItems[existingIndex] = _cartItems[existingIndex].copyWith(
           quantity: newQuantity,
         );
-        await _saveCartItem(_cartItems[existingIndex]);
         _notifySuccess('Quantity updated for ${product.title}');
       } else {
         if (quantity > product.maxOrderQuantity) {
@@ -207,7 +96,6 @@ class CartData {
         }
         final newProduct = product.copyWith(quantity: quantity);
         _cartItems.add(newProduct);
-        await _saveCartItem(newProduct);
         _notifySuccess('${product.title} added to cart');
       }
       _notifyListeners();
@@ -217,7 +105,7 @@ class CartData {
     }
   }
 
-  Future<void> updateCartItemQuantity(String productId, int newQuantity) async {
+  void updateCartItemQuantity(String productId, int newQuantity) {
     try {
       if (newQuantity < 0) {
         throw ArgumentError('Quantity cannot be negative');
@@ -229,14 +117,12 @@ class CartData {
         final product = _cartItems[existingIndex];
         if (newQuantity == 0) {
           _cartItems.removeAt(existingIndex);
-          await _removeCartItem(productId);
           _notifySuccess('${product.title} removed from cart');
         } else {
           if (newQuantity > product.maxOrderQuantity) {
             throw StateError('Maximum order quantity of ${product.maxOrderQuantity} reached');
           }
           _cartItems[existingIndex] = product.copyWith(quantity: newQuantity);
-          await _saveCartItem(_cartItems[existingIndex]);
           _notifySuccess('Quantity updated for ${product.title}');
         }
         _notifyListeners();
@@ -249,7 +135,7 @@ class CartData {
     }
   }
 
-  Future<void> removeFromCart(Product product, {int quantity = 1}) async {
+  void removeFromCart(Product product, {int quantity = 1}) {
     try {
       final existingIndex = _cartItems.indexWhere((p) => p.id == product.id);
       
@@ -261,13 +147,11 @@ class CartData {
 
         if (currentQuantity <= quantity) {
           _cartItems.removeAt(existingIndex);
-          await _removeCartItem(product.id);
           _notifySuccess('${product.title} removed from cart');
         } else {
           _cartItems[existingIndex] = _cartItems[existingIndex].copyWith(
             quantity: currentQuantity - quantity,
           );
-          await _saveCartItem(_cartItems[existingIndex]);
           _notifySuccess('Quantity updated for ${product.title}');
         }
         _notifyListeners();
@@ -278,9 +162,8 @@ class CartData {
     }
   }
 
-  Future<void> clearCart() async {
+  void clearCart() {
     try {
-      await _clearCartInDatabase();
       _cartItems.clear();
       _notifyListeners();
       _notifySuccess('Cart cleared successfully');
@@ -301,13 +184,13 @@ class CartData {
 
   bool isFavorite(Product product) => _favoriteItems.any((p) => p.id == product.id);
 
-  Future<void> toggleFavorite(Product product) async {
+  void toggleFavorite(Product product) {
     try {
       if (isFavorite(product)) {
-        await removeFromFavorites(product);
+        removeFromFavorites(product);
         _notifySuccess('${product.title} removed from favorites');
       } else {
-        await addToFavorites(product);
+        addToFavorites(product);
         _notifySuccess('${product.title} added to favorites');
       }
     } catch (e) {
@@ -316,17 +199,9 @@ class CartData {
     }
   }
 
-  Future<void> addToFavorites(Product product) async {
+  void addToFavorites(Product product) {
     try {
       if (!isFavorite(product)) {
-        final userId = _auth.currentUser?.uid;
-        if (userId != null) {
-          await _firestore.collection('userFavorites').doc('${userId}_${product.id}').set({
-            'userId': userId,
-            'productId': product.id,
-            'createdAt': FieldValue.serverTimestamp(),
-          });
-        }
         _favoriteItems.add(product);
         _notifyListeners();
       }
@@ -336,12 +211,8 @@ class CartData {
     }
   }
 
-  Future<void> removeFromFavorites(Product product) async {
+  void removeFromFavorites(Product product) {
     try {
-      final userId = _auth.currentUser?.uid;
-      if (userId != null) {
-        await _firestore.collection('userFavorites').doc('${userId}_${product.id}').delete();
-      }
       _favoriteItems.removeWhere((p) => p.id == product.id);
       _notifyListeners();
     } catch (e) {
@@ -434,44 +305,18 @@ class CartData {
     };
   }
 
-  Future<void> processCheckout() async {
+  void processCheckout() {
     try {
       if (_cartItems.isEmpty) {
         throw StateError('Cannot checkout with empty cart');
       }
       
-      // Validate product availability and stock
-      final batch = _firestore.batch();
-      final productRefs = _cartItems.map((p) => _firestore.collection('products').doc(p.id)).toList();
-      
-      for (final ref in productRefs) {
-        batch.update(ref, {
-          'lastChecked': FieldValue.serverTimestamp(),
-        });
-      }
-
-      await batch.commit();
-
       final orderData = prepareCheckoutData();
-      final userId = _auth.currentUser?.uid;
-      
-      if (userId == null) {
-        throw StateError('User not authenticated');
-      }
-
-      // Save order to database
-      final orderRef = await _firestore.collection('orders').add({
-        'userId': userId,
-        'orderData': orderData,
-        'status': 'processing',
-        'totalAmount': orderData['total'],
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      
+      // In a real app, you would send this data to your order processing system
       // Clear cart after successful order
-      await clearCart();
+      clearCart();
       
-      _notifySuccess('Order #${orderRef.id} placed successfully!');
+      _notifySuccess('Order placed successfully!');
     } catch (e) {
       _notifyError('Checkout failed: ${e.toString()}');
       rethrow;

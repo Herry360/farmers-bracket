@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'login_screen.dart';
-import 'profile_screen.dart';
-import 'change_password_screen.dart';
 
 // Providers
 final settingsProvider = StateNotifierProvider<SettingsNotifier, SettingsState>((ref) {
@@ -47,23 +43,23 @@ class SettingsState {
 
 class AuthState {
   final bool isAuthenticated;
-  final User? user;
+  final String? username;
   final bool isLoading;
 
   const AuthState({
     this.isAuthenticated = false,
-    this.user,
+    this.username,
     this.isLoading = false,
   });
 
   AuthState copyWith({
     bool? isAuthenticated,
-    User? user,
+    String? username,
     bool? isLoading,
   }) {
     return AuthState(
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
-      user: user ?? this.user,
+      username: username ?? this.username,
       isLoading: isLoading ?? this.isLoading,
     );
   }
@@ -126,20 +122,29 @@ class ThemeNotifier extends StateNotifier<ThemeMode> {
 }
 
 class AuthNotifier extends StateNotifier<AuthState> {
-  AuthNotifier() : super(const AuthState()) {
-    FirebaseAuth.instance.authStateChanges().listen((user) {
+  AuthNotifier() : super(const AuthState());
+
+  Future<void> login(String username, String password) async {
+    try {
+      state = state.copyWith(isLoading: true);
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 1));
       state = AuthState(
-        isAuthenticated: user != null,
-        user: user,
+        isAuthenticated: true,
+        username: username,
       );
-    });
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      rethrow;
+    }
   }
 
   Future<void> logout() async {
     try {
       state = state.copyWith(isLoading: true);
-      await FirebaseAuth.instance.signOut();
-      state = const AuthState(isAuthenticated: false, user: null);
+      // Simulate network delay
+      await Future.delayed(const Duration(milliseconds: 500));
+      state = const AuthState(isAuthenticated: false, username: null);
     } catch (e) {
       state = state.copyWith(isLoading: false);
       rethrow;
@@ -217,7 +222,7 @@ class SettingsScreen extends ConsumerWidget {
     
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ProfileScreen()),
+      MaterialPageRoute(builder: (context) => const Placeholder()), // Replace with your profile screen
     );
   }
 
@@ -237,7 +242,7 @@ class SettingsScreen extends ConsumerWidget {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const LoginScreen()),
+                MaterialPageRoute(builder: (context) => const Placeholder()), // Replace with your login screen
               );
             },
             child: const Text('Login'),
@@ -419,7 +424,7 @@ class SettingsScreen extends ConsumerWidget {
         ),
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
+          MaterialPageRoute(builder: (context) => const Placeholder()), // Replace with your change password screen
         ),
       ),
     );
@@ -489,7 +494,7 @@ class SettingsScreen extends ConsumerWidget {
         ),
         onTap: () => Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
+          MaterialPageRoute(builder: (context) => const Placeholder()), // Replace with your login screen
         ),
       ),
     );
@@ -672,10 +677,6 @@ class SettingsScreen extends ConsumerWidget {
                 if (context.mounted) {
                   Navigator.pop(context);
                   showSnackBar('Logged out successfully');
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => const LoginScreen()),
-                  );
                 }
               } catch (e) {
                 if (context.mounted) {

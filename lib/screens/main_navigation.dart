@@ -1,23 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
 import 'favorites_screen.dart';
 import 'cart_screen.dart';
 import 'settings_screen.dart';
-import '../providers/cart_provider.dart';
 import 'login_screen.dart';
 
-class MainNavigation extends ConsumerStatefulWidget {
+class MainNavigation extends StatefulWidget {
   const MainNavigation({super.key});
 
   @override
-  ConsumerState<MainNavigation> createState() => _MainNavigationState();
+  State<MainNavigation> createState() => _MainNavigationState();
 }
 
-class _MainNavigationState extends ConsumerState<MainNavigation> {
+class _MainNavigationState extends State<MainNavigation> {
   int _selectedIndex = 0;
-  final bool _isNavBarVisible = true;
+  bool _isNavBarVisible = true;
   final List<Widget> _screens = const [
     HomeScreen(),
     FavoritesScreen(),
@@ -25,29 +22,13 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
     SettingsScreen(),
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    _checkAuthStatus();
-  }
-
-  Future<void> _checkAuthStatus() async {
-    final auth = FirebaseAuth.instance;
-    auth.authStateChanges().listen((User? user) {
-      if (user == null && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    });
-  }
+  // Replace with your actual auth check logic
+  bool _isLoggedIn = true;
 
   @override
   Widget build(BuildContext context) {
-    final cartItems = ref.watch(cartProvider);
-    final cartItemCount = cartItems.length;
-    final auth = FirebaseAuth.instance;
+    final cartItemCount = 3; // Replace with your actual cart count
+    final theme = Theme.of(context);
 
     return PopScope(
       canPop: _selectedIndex != 0,
@@ -58,38 +39,43 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: _buildAppBarTitle(),
-          actions: _buildAppBarActions(auth),
+          title: _buildAppBarTitle(theme),
+          actions: _buildAppBarActions(),
+          elevation: 0,
+          centerTitle: false,
         ),
         body: IndexedStack(
           index: _selectedIndex,
           children: _screens,
         ),
         bottomNavigationBar: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
           height: _isNavBarVisible ? kBottomNavigationBarHeight : 0,
-          child: _buildBottomNavBar(cartItemCount),
+          child: _buildBottomNavBar(theme, cartItemCount),
         ),
       ),
     );
   }
 
-  Widget? _buildAppBarTitle() {
-    switch (_selectedIndex) {
-      case 0:
-        return const Text('FarmersBracket');
-      case 1:
-        return const Text('Favorites');
-      case 2:
-        return const Text('Your Cart');
-      case 3:
-        return const Text('Settings');
-      default:
-        return null;
-    }
+  Widget _buildAppBarTitle(ThemeData theme) {
+    final titles = {
+      0: 'FarmersBracket',
+      1: 'Favorites',
+      2: 'Your Cart',
+      3: 'Settings',
+    };
+
+    return Text(
+      titles[_selectedIndex] ?? '',
+      style: theme.textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.bold,
+        color: theme.colorScheme.onSurface,
+      ),
+    );
   }
 
-  List<Widget> _buildAppBarActions(FirebaseAuth auth) {
+  List<Widget> _buildAppBarActions() {
     return [
       if (_selectedIndex == 0)
         IconButton(
@@ -98,97 +84,105 @@ class _MainNavigationState extends ConsumerState<MainNavigation> {
             // Implement search functionality
           },
         ),
-      if (auth.currentUser != null)
+      if (_isLoggedIn)
         IconButton(
           icon: const Icon(Icons.logout),
-          onPressed: () => _signOut(),
+          onPressed: () => _handleSignOut(),
         ),
     ];
   }
 
-  Future<void> _signOut() async {
-    try {
-      await FirebaseAuth.instance.signOut();
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const LoginScreen()),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error signing out: ${e.toString()}')),
-        );
-      }
-    }
-  }
-
-  Widget _buildBottomNavBar(int cartItemCount) {
-    return BottomNavigationBar(
-      currentIndex: _selectedIndex,
-      onTap: (index) => setState(() => _selectedIndex = index),
-      type: BottomNavigationBarType.fixed,
-      selectedItemColor: Theme.of(context).colorScheme.primary,
-      unselectedItemColor: Colors.grey,
-      selectedLabelStyle: const TextStyle(fontSize: 12),
-      unselectedLabelStyle: const TextStyle(fontSize: 12),
-      items: [
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.store_outlined),
-          activeIcon: Icon(Icons.store),
-          label: 'Shop',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.favorite_outline),
-          activeIcon: Icon(Icons.favorite),
-          label: 'Wishlist',
-        ),
-        BottomNavigationBarItem(
-          icon: _buildCartIcon(cartItemCount, false),
-          activeIcon: _buildCartIcon(cartItemCount, true),
-          label: 'Cart',
-        ),
-        const BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined),
-          activeIcon: Icon(Icons.settings),
-          label: 'Settings',
-        ),
-      ],
+  Future<void> _handleSignOut() async {
+    // Replace with your actual sign out logic
+    setState(() => _isLoggedIn = false);
+    
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (context) => const LoginScreen()),
     );
   }
 
-  Widget _buildCartIcon(int itemCount, bool isActive) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Icon(isActive ? Icons.shopping_cart : Icons.shopping_cart_outlined),
-        if (itemCount > 0)
-          Positioned(
-            right: -8,
-            top: -4,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: Colors.red,
-                shape: BoxShape.circle,
-              ),
-              constraints: const BoxConstraints(
-                minWidth: 16,
-                minHeight: 16,
-              ),
-              child: Text(
-                itemCount > 9 ? '9+' : itemCount.toString(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                ),
-                textAlign: TextAlign.center,
-              ),
-            ),
+  Widget _buildBottomNavBar(ThemeData theme, int cartItemCount) {
+    return Container(
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
-      ],
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) => setState(() => _selectedIndex = index),
+          type: BottomNavigationBarType.fixed,
+          selectedItemColor: theme.colorScheme.primary,
+          unselectedItemColor: theme.colorScheme.onSurface.withOpacity(0.6),
+          selectedLabelStyle: const TextStyle(fontSize: 12),
+          unselectedLabelStyle: const TextStyle(fontSize: 12),
+          backgroundColor: theme.colorScheme.surface,
+          elevation: 0,
+          items: [
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.store_outlined),
+              activeIcon: Icon(
+                Icons.store,
+                color: theme.colorScheme.primary,
+              ),
+              label: 'Shop',
+              tooltip: 'Browse Products',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.favorite_outline),
+              activeIcon: Icon(
+                Icons.favorite,
+                color: theme.colorScheme.primary,
+              ),
+              label: 'Wishlist',
+              tooltip: 'Your Favorites',
+            ),
+            BottomNavigationBarItem(
+              icon: _buildCartIcon(cartItemCount, false, theme),
+              activeIcon: _buildCartIcon(cartItemCount, true, theme),
+              label: 'Cart',
+              tooltip: 'Your Shopping Cart',
+            ),
+            BottomNavigationBarItem(
+              icon: const Icon(Icons.settings_outlined),
+              activeIcon: Icon(
+                Icons.settings,
+                color: theme.colorScheme.primary,
+              ),
+              label: 'Settings',
+              tooltip: 'App Settings',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCartIcon(int itemCount, bool isActive, ThemeData theme) {
+    return Badge(
+      isLabelVisible: itemCount > 0,
+      label: Text(
+        itemCount > 9 ? '9+' : itemCount.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      backgroundColor: theme.colorScheme.error,
+      alignment: Alignment.topRight,
+      offset: const Offset(8, -8),
+      child: Icon(
+        isActive ? Icons.shopping_cart : Icons.shopping_cart_outlined,
+        color: isActive ? theme.colorScheme.primary : null,
+      ),
     );
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 
@@ -40,6 +39,11 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }
 
   void updateQuantity(String productId, int newQuantity, {String? variant}) {
+    if (newQuantity <= 0) {
+      removeItem(productId, variant: variant);
+      return;
+    }
+
     state = state.map((item) {
       if (item.product.id == productId && item.selectedVariant == variant) {
         return item.copyWith(quantity: newQuantity);
@@ -64,82 +68,72 @@ class CartNotifier extends StateNotifier<List<CartItem>> {
   }
 
   void changeVariant(String productId, String oldVariant, String newVariant) {
-    final item = state.firstWhere(
+    final itemIndex = state.indexWhere(
       (item) => item.product.id == productId && item.selectedVariant == oldVariant
     );
     
-    removeItem(productId, variant: oldVariant);
-    addItem(item.product, quantity: item.quantity, variant: newVariant);
+    if (itemIndex >= 0) {
+      final item = state[itemIndex];
+      state = [
+        ...state.sublist(0, itemIndex),
+        ...state.sublist(itemIndex + 1),
+        item.copyWith(selectedVariant: newVariant),
+      ];
+    }
   }
 
-// ================== Calculated Properties ================== //
+  // ================== Calculated Properties ================== //
 
-double get subtotal {
-  return state.fold(0, (total, item) => total + item.subtotal);
-}
+  double get subtotal {
+    return state.fold(0, (total, item) => total + item.subtotal);
+  }
 
-double get discountedSubtotal {
-  return state.fold(0, (total, item) => total + item.discountedSubtotal);
-}
+  double get discountedSubtotal {
+    return state.fold(0, (total, item) => total + item.discountedSubtotal);
+  }
 
-double get totalSavings {
-  return state.fold(0, (total, item) => total + (item.savings ?? 0));
-}
+  double get totalSavings {
+    return state.fold(0, (total, item) => total + (item.savings ?? 0));
+  }
 
-int get itemCount {
-  return state.fold(0, (count, item) => count + item.quantity);
-}
+  int get itemCount {
+    return state.fold(0, (count, item) => count + item.quantity);
+  }
 
-  // ================== Firebase Integration ================== //
+  // ================== Persistence Methods (To Be Implemented) ================== //
 
   Future<void> loadCartForUser(String userId) async {
-    try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('user_carts')
-          .doc(userId)
-          .collection('items')
-          .get();
-
-      final items = await Future.wait(snapshot.docs.map((doc) async {
-        final productRef = doc.data()['product_ref'] as DocumentReference;
-        final productDoc = await productRef.get();
-        final product = Product.fromFirestore(productDoc);
-        return CartItem.fromFirestore(doc.data(), product);
-      }));
-
-      state = items;
-    } catch (e) {
-      throw Exception('Failed to load cart: $e');
-    }
+    // Implement your local storage or API loading logic here
+    // Example using shared_preferences:
+    // final prefs = await SharedPreferences.getInstance();
+    // final cartData = prefs.getString('cart_$userId');
+    // if (cartData != null) {
+    //   state = CartItem.listFromJson(cartData);
+    // }
   }
 
   Future<void> saveCartForUser(String userId) async {
-    try {
-      final batch = FirebaseFirestore.instance.batch();
-      final cartRef = FirebaseFirestore.instance
-          .collection('user_carts')
-          .doc(userId)
-          .collection('items');
-
-      // Clear existing items
-      final snapshot = await cartRef.get();
-      for (final doc in snapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      // Add current items
-      for (final item in state) {
-        final docRef = cartRef.doc();
-        batch.set(docRef, item.toFirestore());
-      }
-
-      await batch.commit();
-    } catch (e) {
-      throw Exception('Failed to save cart: $e');
-    }
+    // Implement your local storage or API saving logic here
+    // Example using shared_preferences:
+    // final prefs = await SharedPreferences.getInstance();
+    // await prefs.setString('cart_$userId', jsonEncode(state.map((e) => e.toJson()).toList()));
   }
 
-  void addToCart(Product product) {}
+  // ================== Helper Methods ================== //
+
+  bool containsProduct(String productId, {String? variant}) {
+    return state.any((item) => 
+      item.product.id == productId && item.selectedVariant == variant
+    );
+  }
+
+  int getProductQuantity(String productId, {String? variant}) {
+    final item = state.firstWhere(
+      (item) => item.product.id == productId && item.selectedVariant == variant,
+      orElse: () => CartItem(product: Product.empty, quantity: 0),
+    );
+    return item.quantity;
+  }
 }
 
 // Provider

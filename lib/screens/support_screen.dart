@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Fixed import
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart'; // Added for DateFormat
+import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // Provider for support options
 final supportOptionsProvider = FutureProvider.autoDispose<List<SupportOption>>((ref) async {
@@ -33,21 +31,6 @@ class SupportOption {
     this.updatedAt,
   });
 
-  factory SupportOption.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    return SupportOption(
-      id: doc.id,
-      title: data['title'] ?? 'Support',
-      icon: _iconFromString(data['icon'] ?? 'help_outline'),
-      subtitle: data['subtitle'],
-      action: data['action'],
-      description: data['description'],
-      displayOrder: data['displayOrder'] ?? 0,
-      isActive: data['isActive'] ?? true,
-      updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(), // Fixed Timestamp usage
-    );
-  }
-
   static IconData _iconFromString(String iconName) {
     switch (iconName) {
       case 'question_answer': return Icons.question_answer;
@@ -64,22 +47,40 @@ class SupportOption {
 }
 
 class SupportService {
-  static final _firestore = FirebaseFirestore.instance;
-
   static Future<List<SupportOption>> fetchSupportOptions() async {
-    try {
-      final querySnapshot = await _firestore
-          .collection('support_options')
-          .where('isActive', isEqualTo: true)
-          .orderBy('displayOrder')
-          .get();
-
-      return querySnapshot.docs
-          .map((doc) => SupportOption.fromFirestore(doc))
-          .toList();
-    } catch (e) {
-      throw Exception('Failed to load support options: $e');
-    }
+    // Mock data instead of Firebase
+    await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
+    
+    return [
+      SupportOption(
+        id: '1',
+        title: 'Contact Support',
+        icon: Icons.contact_support,
+        subtitle: 'Get help from our support team',
+        action: 'mailto:support@example.com',
+        description: 'Send us an email and we\'ll get back to you within 24 hours.',
+        displayOrder: 1,
+        updatedAt: DateTime.now(),
+      ),
+      SupportOption(
+        id: '2',
+        title: 'FAQs',
+        icon: Icons.help,
+        subtitle: 'Frequently asked questions',
+        description: 'Find answers to common questions about our service.',
+        displayOrder: 2,
+        updatedAt: DateTime.now().subtract(const Duration(days: 5)),
+      ),
+      SupportOption(
+        id: '3',
+        title: 'Live Chat',
+        icon: Icons.chat,
+        subtitle: 'Chat with a support agent',
+        description: 'Available Monday-Friday, 9am-5pm',
+        displayOrder: 3,
+        updatedAt: DateTime.now().subtract(const Duration(days: 10)),
+      ),
+    ];
   }
 
   static Future<void> logSupportInteraction({
@@ -87,16 +88,8 @@ class SupportService {
     required String optionTitle,
     String? userId,
   }) async {
-    try {
-      await _firestore.collection('support_interactions').add({
-        'optionId': optionId,
-        'optionTitle': optionTitle,
-        'userId': userId ?? FirebaseAuth.instance.currentUser?.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (e) {
-      debugPrint('Failed to log support interaction: $e');
-    }
+    // Mock implementation - would normally log to analytics or backend
+    debugPrint('Support interaction: $optionTitle ($optionId) by $userId');
   }
 }
 
@@ -183,11 +176,9 @@ class SupportScreen extends ConsumerWidget {
 
   Future<void> _handleOptionTap(BuildContext context, SupportOption option) async {
     // Log the interaction
-    final userId = FirebaseAuth.instance.currentUser?.uid;
     await SupportService.logSupportInteraction(
       optionId: option.id,
       optionTitle: option.title,
-      userId: userId,
     );
 
     if (option.action != null) {

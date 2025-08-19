@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 // Provider for change password state
 final changePasswordProvider = StateNotifierProvider<ChangePasswordNotifier, ChangePasswordState>((ref) {
@@ -9,8 +8,6 @@ final changePasswordProvider = StateNotifierProvider<ChangePasswordNotifier, Cha
 
 class ChangePasswordNotifier extends StateNotifier<ChangePasswordState> {
   ChangePasswordNotifier() : super(ChangePasswordState());
-
-  final FirebaseAuth _auth = FirebaseAuth.instance;
 
   void updateCurrentPassword(String value) {
     state = state.copyWith(currentPassword: value);
@@ -30,46 +27,20 @@ class ChangePasswordNotifier extends StateNotifier<ChangePasswordState> {
     state = state.copyWith(isLoading: true, errorMessage: '');
     
     try {
-      // Get current user
-      final user = _auth.currentUser;
-      if (user == null) {
-        throw FirebaseAuthException(
-          code: 'user-not-logged-in',
-          message: 'No user is currently signed in',
-        );
-      }
-
-      // Reauthenticate user with current password
-      final credential = EmailAuthProvider.credential(
-        email: user.email!,
-        password: state.currentPassword,
-      );
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 2));
       
-      await user.reauthenticateWithCredential(credential);
-
-      // Update password
-      await user.updatePassword(state.newPassword);
+      // In a real app, you would call your authentication service here
+      // For example:
+      // await authService.changePassword(
+      //   currentPassword: state.currentPassword,
+      //   newPassword: state.newPassword,
+      // );
       
       state = state.copyWith(
         isLoading: false,
         isSuccess: true,
         errorMessage: '',
-      );
-    } on FirebaseAuthException catch (e) {
-      String errorMessage = 'Failed to change password. Please try again.';
-      
-      if (e.code == 'wrong-password') {
-        errorMessage = 'Current password is incorrect';
-      } else if (e.code == 'weak-password') {
-        errorMessage = 'Password should be at least 6 characters';
-      } else if (e.code == 'requires-recent-login') {
-        errorMessage = 'This operation requires recent authentication. Please log in again.';
-      }
-      
-      state = state.copyWith(
-        isLoading: false,
-        isSuccess: false,
-        errorMessage: errorMessage,
       );
     } catch (e) {
       state = state.copyWith(

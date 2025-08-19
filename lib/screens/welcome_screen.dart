@@ -1,31 +1,19 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'login_screen.dart';
 
-// Remote Config Provider
-final remoteConfigProvider = FutureProvider<FirebaseRemoteConfig>((ref) async {
-  final remoteConfig = FirebaseRemoteConfig.instance;
-  await remoteConfig.setConfigSettings(RemoteConfigSettings(
-    fetchTimeout: const Duration(seconds: 10),
-    minimumFetchInterval: const Duration(hours: 1),
-  ));
-  await remoteConfig.fetchAndActivate();
-  return remoteConfig;
-});
-
 // Welcome Content Provider
-final welcomeContentProvider = FutureProvider<WelcomeContent>((ref) async {
-  final remoteConfig = await ref.read(remoteConfigProvider.future);
-  return WelcomeContent.fromRemoteConfig(remoteConfig);
-});
-
-// Analytics Provider
-final analyticsProvider = Provider<FirebaseAnalytics>((ref) {
-  return FirebaseAnalytics.instance;
+final welcomeContentProvider = Provider<WelcomeContent>((ref) {
+  return WelcomeContent(
+    appName: 'My App',
+    tagline: 'Welcome to our amazing application',
+    buttonText: 'Get Started',
+    imageUrl: null, // You can add a local image asset path here
+    primaryColor: Colors.green,
+    secondaryColor: Colors.white,
+    showSkipButton: false,
+  );
 });
 
 class WelcomeContent {
@@ -46,24 +34,6 @@ class WelcomeContent {
     this.secondaryColor = Colors.white,
     this.showSkipButton = false,
   });
-
-  factory WelcomeContent.fromRemoteConfig(FirebaseRemoteConfig remoteConfig) {
-    return WelcomeContent(
-      appName: remoteConfig.getString('welcome_app_name'),
-      tagline: remoteConfig.getString('welcome_tagline'),
-      buttonText: remoteConfig.getString('welcome_button_text'),
-      imageUrl: remoteConfig.getString('welcome_image_url'),
-      primaryColor: Color(int.parse(
-        remoteConfig.getString('welcome_primary_color'),
-        radix: 16,
-      )),
-      secondaryColor: Color(int.parse(
-        remoteConfig.getString('welcome_secondary_color'),
-        radix: 16,
-      )),
-      showSkipButton: remoteConfig.getBool('welcome_show_skip_button'),
-    );
-  }
 }
 
 class WelcomeScreen extends ConsumerStatefulWidget {
@@ -81,7 +51,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   void initState() {
     super.initState();
     _checkFirstSeen();
-    _logAnalyticsEvent('welcome_screen_view');
   }
 
   Future<void> _checkFirstSeen() async {
@@ -91,20 +60,8 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
     });
   }
 
-  Future<void> _logAnalyticsEvent(String eventName) async {
-    final analytics = ref.read(analyticsProvider);
-    await analytics.logEvent(
-      name: eventName,
-      parameters: {
-        'screen_name': 'WelcomeScreen',
-        'user_id': FirebaseAuth.instance.currentUser?.uid ?? 'anonymous',
-      },
-    );
-  }
-
   Future<void> _navigateToLogin() async {
     setState(() => _isLoading = true);
-    await _logAnalyticsEvent('welcome_continue_clicked');
     
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('has_seen_welcome', true);
@@ -118,14 +75,10 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final welcomeContentAsync = ref.watch(welcomeContentProvider);
+    final welcomeContent = ref.watch(welcomeContentProvider);
 
     return Scaffold(
-      body: welcomeContentAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) => _buildErrorState(context, error),
-        data: (content) => _buildWelcomeContent(context, content),
-      ),
+      body: _buildWelcomeContent(context, welcomeContent),
     );
   }
 
@@ -150,6 +103,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   if (content.imageUrl != null) ...[
+                    // Replace with Image.asset if using local assets
                     Image.network(
                       content.imageUrl!,
                       height: 200,
@@ -240,33 +194,6 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildErrorState(BuildContext context, Object error) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
-          const SizedBox(height: 16),
-          const Text(
-            'Failed to load welcome content',
-            style: TextStyle(fontSize: 18),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            error.toString(),
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: () => ref.refresh(welcomeContentProvider),
-            child: const Text('Retry'),
-          ),
-        ],
-      ),
     );
   }
 }

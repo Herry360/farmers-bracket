@@ -1,7 +1,6 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:ecommerce_app/models/product.dart';
-import 'package:ecommerce_app/models/shipping_address.dart';
-import 'package:ecommerce_app/models/payment_method.dart';
+import '../models/product.dart';
+import '../models/shipping_address.dart';
+import '../models/payment_method.dart';
 
 class Order {
   final String id;
@@ -28,33 +27,36 @@ class Order {
     this.shippingAddress,
   });
 
-  factory Order.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
-      id: doc.id,
-      userId: data['userId'] ?? '',
-      items: (data['items'] as List).map((i) => Product.fromJson(i)).toList(),
-      totalAmount: (data['totalAmount'] ?? 0).toDouble(),
-      status: data['status'] ?? 'processing',
-      date: (data['date'] as Timestamp).toDate(),
-      taxAmount: (data['taxAmount'] ?? 0).toDouble(),
-      discountAmount: (data['discountAmount'] ?? 0).toDouble(),
-      paymentMethod: data['paymentMethod'] != null 
-          ? PaymentMethod.fromMap(data['paymentMethod'])
+      id: json['id'] ?? '',
+      userId: json['userId'] ?? '',
+      items: (json['items'] as List<dynamic>?)
+              ?.map((i) => Product.fromJson(i))
+              .toList() ??
+          [],
+      totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      status: json['status'] ?? 'processing',
+      date: DateTime.parse(json['date']),
+      taxAmount: (json['taxAmount'] as num?)?.toDouble(),
+      discountAmount: (json['discountAmount'] as num?)?.toDouble(),
+      paymentMethod: json['paymentMethod'] != null
+          ? PaymentMethod.fromMap(json['paymentMethod'])
           : null,
-      shippingAddress: data['shippingAddress'] != null
-          ? ShippingAddress.fromMap(data['shippingAddress'])
+      shippingAddress: json['shippingAddress'] != null
+          ? ShippingAddress.fromMap(json['shippingAddress'])
           : null,
     );
   }
 
-  Map<String, dynamic> toFirestore() {
+  Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'userId': userId,
       'items': items.map((item) => item.toJson()).toList(),
       'totalAmount': totalAmount,
       'status': status,
-      'date': date,
+      'date': date.toIso8601String(),
       'taxAmount': taxAmount,
       'discountAmount': discountAmount,
       'paymentMethod': paymentMethod?.toMap(),
@@ -86,5 +88,29 @@ class Order {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       shippingAddress: shippingAddress ?? this.shippingAddress,
     );
+  }
+
+  // Business logic methods
+  double get subtotal {
+    return items.fold(0, (sum, item) => sum + item.price * item.quantity);
+  }
+
+  double get grandTotal {
+    return subtotal + (taxAmount ?? 0) - (discountAmount ?? 0);
+  }
+
+  bool get isPending => status == 'pending';
+  bool get isProcessing => status == 'processing';
+  bool get isShipped => status == 'shipped';
+  bool get isDelivered => status == 'delivered';
+  bool get isCancelled => status == 'cancelled';
+
+  // Utility methods
+  int get itemCount {
+    return items.fold(0, (count, item) => count + item.quantity);
+  }
+
+  bool containsProduct(String productId) {
+    return items.any((item) => item.id == productId);
   }
 }

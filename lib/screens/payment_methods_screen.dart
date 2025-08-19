@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class PaymentMethodsScreen extends StatefulWidget {
   const PaymentMethodsScreen({super.key});
@@ -11,66 +9,12 @@ class PaymentMethodsScreen extends StatefulWidget {
 
 class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
   int _selectedMethodIndex = 0;
-  bool _isLoading = true;
   bool _isSaving = false;
-  List<String> _paymentMethods = [];
-  final _userId = FirebaseAuth.instance.currentUser?.uid;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPaymentMethods();
-  }
-
-  Future<void> _loadPaymentMethods() async {
-    if (_userId == null) return;
-
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(_userId)
-          .get();
-
-      if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        setState(() {
-          _paymentMethods = List<String>.from(data['paymentMethods'] ?? []);
-          _selectedMethodIndex = data['selectedPaymentMethod'] ?? 0;
-          _isLoading = false;
-        });
-      } else {
-        // Initialize with default methods if no user document exists
-        setState(() {
-          _paymentMethods = ['Credit Card', 'PayPal', 'Cash on Delivery'];
-          _isLoading = false;
-        });
-        await _saveMethodsToFirestore();
-      }
-    } catch (e) {
-      setState(() {
-        _paymentMethods = ['Credit Card', 'PayPal', 'Cash on Delivery'];
-        _isLoading = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error loading payment methods: ${e.toString()}'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
-  }
-
-  Future<void> _saveMethodsToFirestore() async {
-    if (_userId == null) return;
-
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(_userId)
-        .set({
-          'paymentMethods': _paymentMethods,
-          'selectedPaymentMethod': _selectedMethodIndex,
-        }, SetOptions(merge: true));
-  }
+    final List<String> _paymentMethods = [
+    'Credit Card',
+    'PayPal',
+    'Cash on Delivery'
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -80,96 +24,95 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Payment Methods'),
+        centerTitle: false,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: _isSaving ? null : () => Navigator.of(context).pop(),
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Select Payment Method',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // Payment Methods List
-                  Column(
-                    children: List.generate(
-                      _paymentMethods.length,
-                      (index) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _PaymentMethodCard(
-                          method: _paymentMethods[index],
-                          isSelected: _selectedMethodIndex == index,
-                          onSelected: _isSaving 
-                              ? null
-                              : () => setState(() => _selectedMethodIndex = index),
-                          onDelete: _isSaving
-                              ? null
-                              : () => _deletePaymentMethod(index),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Add New Payment Method
-                  Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: colorScheme.outlineVariant,
-                        width: 1,
-                      ),
-                    ),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: _isSaving ? null : _addNewPaymentMethod,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 40,
-                              height: 40,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: colorScheme.primaryContainer,
-                              ),
-                              child: Icon(
-                                Icons.add,
-                                color: colorScheme.primary,
-                              ),
-                            ),
-                            const SizedBox(width: 16),
-                            Text(
-                              'Add New Payment Method',
-                              style: theme.textTheme.bodyLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Select Payment Method',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 16),
+            
+            // Payment Methods List
+            Column(
+              children: List.generate(
+                _paymentMethods.length,
+                (index) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _PaymentMethodCard(
+                    method: _paymentMethods[index],
+                    isSelected: _selectedMethodIndex == index,
+                    onSelected: _isSaving 
+                        ? null
+                        : () => setState(() => _selectedMethodIndex = index),
+                    onDelete: _isSaving || _isDefaultMethod(_paymentMethods[index])
+                        ? null
+                        : () => _deletePaymentMethod(index),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Add New Payment Method
+            Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: colorScheme.outlineVariant,
+                  width: 1,
+                ),
+              ),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(12),
+                onTap: _isSaving ? null : _addNewPaymentMethod,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: colorScheme.primaryContainer,
+                        ),
+                        child: Icon(
+                          Icons.add,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Text(
+                        'Add New Payment Method',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
       bottomNavigationBar: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: FilledButton(
-            onPressed: _isSaving || _isLoading ? null : _savePaymentMethod,
+            onPressed: _isSaving ? null : _savePaymentMethod,
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(
@@ -200,11 +143,10 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
         _paymentMethods.add(result);
         _selectedMethodIndex = _paymentMethods.length - 1;
       });
-      await _saveMethodsToFirestore();
     }
   }
 
-  Future<void> _deletePaymentMethod(int index) async {
+  void _deletePaymentMethod(int index) {
     if (_paymentMethods.length <= 1) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -223,47 +165,32 @@ class _PaymentMethodsScreenState extends State<PaymentMethodsScreen> {
             : 0;
       }
     });
-    await _saveMethodsToFirestore();
   }
 
   Future<void> _savePaymentMethod() async {
-    if (!mounted || _userId == null) return;
-    
     setState(() => _isSaving = true);
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-
-    try {
-      await _saveMethodsToFirestore();
-      
-      if (!mounted) return;
-      
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: const Text('Payment method saved successfully'),
-          behavior: SnackBarBehavior.floating,
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+    await Future.delayed(const Duration(seconds: 1)); // Simulate network delay
+    
+    if (!mounted) return;
+    
+    setState(() => _isSaving = false);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('Payment method saved successfully'),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
         ),
-      );
+      ),
+    );
 
-      Navigator.of(context).pop(_paymentMethods[_selectedMethodIndex]);
-    } catch (e) {
-      if (!mounted) return;
-      
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('Failed to save: ${e.toString()}'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
+    Navigator.of(context).pop(_paymentMethods[_selectedMethodIndex]);
+  }
+
+  bool _isDefaultMethod(String method) {
+    return ['Credit Card', 'PayPal', 'Cash on Delivery'].contains(method);
   }
 }
 
@@ -331,7 +258,7 @@ class _PaymentMethodCard extends StatelessWidget {
                   ),
                 ),
               ),
-              if (onDelete != null && !_isDefaultMethod(method))
+              if (onDelete != null)
                 IconButton(
                   icon: Icon(
                     Icons.delete_outline,
@@ -356,13 +283,11 @@ class _PaymentMethodCard extends StatelessWidget {
         return Icons.money;
       case 'digital wallet':
         return Icons.wallet;
+      case 'bank transfer':
+        return Icons.account_balance;
       default:
         return Icons.credit_score;
     }
-  }
-
-  bool _isDefaultMethod(String method) {
-    return ['Credit Card', 'PayPal', 'Cash on Delivery'].contains(method);
   }
 }
 
@@ -376,9 +301,11 @@ class _AddPaymentMethodSheet extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text(
+          Text(
             'Add New Payment Method',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
           ),
           const SizedBox(height: 16),
           ListTile(
@@ -397,7 +324,7 @@ class _AddPaymentMethodSheet extends StatelessWidget {
             onTap: () => Navigator.pop(context, 'Digital Wallet'),
           ),
           ListTile(
-            leading: const Icon(Icons.money),
+            leading: const Icon(Icons.account_balance),
             title: const Text('Bank Transfer'),
             onTap: () => Navigator.pop(context, 'Bank Transfer'),
           ),
@@ -406,6 +333,7 @@ class _AddPaymentMethodSheet extends StatelessWidget {
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
+          const SizedBox(height: 8),
         ],
       ),
     );

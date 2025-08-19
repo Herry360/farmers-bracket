@@ -1,6 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
 
 class FavoritesNotifier extends StateNotifier<AsyncValue<List<Product>>> {
@@ -9,95 +7,63 @@ class FavoritesNotifier extends StateNotifier<AsyncValue<List<Product>>> {
   }
 
   final Ref ref;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
+  List<Product> _favorites = [];
 
   Future<void> _initializeFavorites() async {
-    final user = _auth.currentUser;
-    if (user == null) {
-      state = const AsyncValue.data([]);
-      return;
-    }
-
     try {
       state = const AsyncValue.loading();
-      final snapshot = await _firestore
-          .collection('userFavorites')
-          .doc(user.uid)
-          .collection('products')
-          .get();
-
-      final favorites = snapshot.docs
-          .map((doc) => Product.fromJson(doc.data()))
-          .toList();
-      state = AsyncValue.data(favorites);
+      // Replace with your actual data loading logic
+      // This could be from local storage or mock data
+      await Future.delayed(const Duration(milliseconds: 300)); // Simulate loading
+      
+      // Example mock data - replace with your actual data source
+      _favorites = [];
+      state = AsyncValue.data(_favorites);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
   Future<void> toggleFavorite(Product product) async {
-    final user = _auth.currentUser;
-    if (user == null) return;
+    try {
+      final currentState = state;
+      if (currentState is! AsyncData<List<Product>>) return;
 
-    state.whenData((favorites) async {
-      try {
-        final isFavorite = favorites.any((p) => p.id == product.id);
-        final favoriteRef = _firestore
-            .collection('userFavorites')
-            .doc(user.uid)
-            .collection('products')
-            .doc(product.id);
+      final isFavorite = currentState.value.any((p) => p.id == product.id);
+      final newFavorites = [...currentState.value];
 
-        if (isFavorite) {
-          await favoriteRef.delete();
-          state = AsyncValue.data(
-              favorites.where((p) => p.id != product.id).toList());
-        } else {
-          await favoriteRef.set(product.toJson());
-          state = AsyncValue.data([...favorites, product]);
-        }
-      } catch (e, st) {
-        state = AsyncValue.error(e, st);
+      if (isFavorite) {
+        newFavorites.removeWhere((p) => p.id == product.id);
+      } else {
+        newFavorites.add(product);
       }
-    });
+
+      state = AsyncValue.data(newFavorites);
+      _favorites = newFavorites;
+      
+      // Here you would typically persist to local storage or API
+      print('Favorite toggled for product ${product.id}');
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    }
   }
 
   Future<void> clearAllFavorites() async {
-    final user = _auth.currentUser;
-    if (user == null) return;
-
     try {
-      final batch = _firestore.batch();
-      final favorites = await _firestore
-          .collection('userFavorites')
-          .doc(user.uid)
-          .collection('products')
-          .get();
-
-      for (final doc in favorites.docs) {
-        batch.delete(doc.reference);
-      }
-
-      await batch.commit();
       state = const AsyncValue.data([]);
+      _favorites = [];
+      
+      // Here you would typically clear from local storage or API
+      print('All favorites cleared');
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
   }
 
   Stream<List<Product>> favoritesStream() {
-    final user = _auth.currentUser;
-    if (user == null) return Stream.value([]);
-
-    return _firestore
-        .collection('userFavorites')
-        .doc(user.uid)
-        .collection('products')
-        .snapshots()
-        .map((snapshot) => snapshot.docs
-            .map((doc) => Product.fromJson(doc.data()))
-            .toList());
+    // This is a mock stream implementation
+    // Replace with your actual stream source
+    return Stream.value(_favorites);
   }
 }
 

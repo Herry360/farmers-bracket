@@ -1,57 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Provider for authentication state
-final authProvider = StateNotifierProvider<AuthNotifier, AsyncValue<User?>>((ref) {
-  return AuthNotifier();
-});
-
-class AuthNotifier extends StateNotifier<AsyncValue<User?>> {
-  AuthNotifier() : super(const AsyncValue.data(null)) {
-    // Listen to auth state changes
-    FirebaseAuth.instance.authStateChanges().listen((user) {
-      state = AsyncValue.data(user);
-    });
-  }
-
-  Future<void> registerWithEmail({
-    required String name,
-    required String email,
-    required String password,
-  }) async {
-    try {
-      state = const AsyncValue.loading();
-      final auth = FirebaseAuth.instance;
-      
-      // Create user
-      final credential = await auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-
-      // Update user display name
-      await credential.user?.updateDisplayName(name);
-      
-      // Send email verification
-      await credential.user?.sendEmailVerification();
-
-      state = AsyncValue.data(credential.user);
-    } on FirebaseAuthException catch (e) {
-      state = AsyncValue.error(e, StackTrace.current);
-      rethrow;
-    }
-  }
-}
-
-class RegisterScreen extends ConsumerStatefulWidget {
+class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
   @override
-  ConsumerState<RegisterScreen> createState() => _RegisterScreenState();
+  State<RegisterScreen> createState() => _RegisterScreenState();
 }
 
-class _RegisterScreenState extends ConsumerState<RegisterScreen> {
+class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -61,6 +17,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptTerms = false;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -80,78 +37,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       return;
     }
 
-    try {
-      await ref.read(authProvider.notifier).registerWithEmail(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      if (!mounted) return;
-      
-      // Show success dialog
-      await showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: const Text('Registration Successful'),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.check_circle, color: Colors.green, size: 48),
-              SizedBox(height: 16),
-              Text('A verification email has been sent to your email address.'),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
-              child: const Text('Continue to Login'),
-            ),
+    setState(() => _isLoading = true);
+    await Future.delayed(const Duration(seconds: 2)); // Simulate network delay
+    
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    
+    // Show success dialog
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        title: const Text('Registration Successful'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.check_circle, color: Colors.green, size: 48),
+            SizedBox(height: 16),
+            Text('A verification email has been sent to your email address.'),
           ],
         ),
-      );
-    } on FirebaseAuthException catch (e) {
-      String errorMessage;
-      switch (e.code) {
-        case 'email-already-in-use':
-          errorMessage = 'Email is already registered';
-          break;
-        case 'invalid-email':
-          errorMessage = 'Please enter a valid email';
-          break;
-        case 'operation-not-allowed':
-          errorMessage = 'Email/password accounts are not enabled';
-          break;
-        case 'weak-password':
-          errorMessage = 'Password is too weak';
-          break;
-        default:
-          errorMessage = 'Registration failed: ${e.message}';
-      }
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(errorMessage)),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('An unexpected error occurred')),
-      );
-    }
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pushReplacementNamed(context, '/login'),
+            child: const Text('Continue to Login'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authProvider);
-    final isLoading = authState.isLoading;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Create Account'),
+        centerTitle: false,
         elevation: 0,
       ),
       body: SafeArea(
@@ -170,6 +97,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+                
+                // Name Field
                 TextFormField(
                   controller: _nameController,
                   decoration: InputDecoration(
@@ -178,6 +107,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
                   ),
                   textCapitalization: TextCapitalization.words,
                   validator: (value) {
@@ -191,6 +122,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                
+                // Email Field
                 TextFormField(
                   controller: _emailController,
                   decoration: InputDecoration(
@@ -199,20 +132,23 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
-                        .hasMatch(value)) {
+                    if (!value.contains('@')) {
                       return 'Please enter a valid email';
                     }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
+                
+                // Password Field
                 TextFormField(
                   controller: _passwordController,
                   obscureText: _obscurePassword,
@@ -222,11 +158,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscurePassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                       onPressed: () {
                         setState(() => _obscurePassword = !_obscurePassword);
@@ -240,19 +179,12 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     if (value.length < 8) {
                       return 'Password must be at least 8 characters';
                     }
-                    if (!value.contains(RegExp(r'[A-Z]'))) {
-                      return 'Must contain an uppercase letter';
-                    }
-                    if (!value.contains(RegExp(r'[0-9]'))) {
-                      return 'Must contain a number';
-                    }
-                    if (!value.contains(RegExp(r'[!@#$%^&*(),.?":{}|<>]'))) {
-                      return 'Must contain a special character';
-                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 16),
+                
+                // Confirm Password Field
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: _obscureConfirmPassword,
@@ -262,11 +194,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
+                    filled: true,
+                    fillColor: colorScheme.surfaceVariant.withOpacity(0.2),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _obscureConfirmPassword
                             ? Icons.visibility_outlined
                             : Icons.visibility_off_outlined,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                       onPressed: () {
                         setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
@@ -284,6 +219,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 16),
+                
+                // Terms Checkbox
                 Row(
                   children: [
                     Checkbox(
@@ -291,6 +228,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       onChanged: (value) {
                         setState(() => _acceptTerms = value ?? false);
                       },
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4),
+                      ),
                     ),
                     Expanded(
                       child: Wrap(
@@ -300,7 +240,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             onTap: () => Navigator.pushNamed(context, '/terms'),
                             child: Text(
                               'Terms of Service',
-                              style: TextStyle(color: colorScheme.primary),
+                              style: TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                           const Text(' and '),
@@ -308,7 +251,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                             onTap: () => Navigator.pushNamed(context, '/privacy'),
                             child: Text(
                               'Privacy Policy',
-                              style: TextStyle(color: colorScheme.primary),
+                              style: TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
@@ -317,15 +263,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   ],
                 ),
                 const SizedBox(height: 32),
+                
+                // Register Button
                 FilledButton(
-                  onPressed: isLoading ? null : _submitForm,
+                  onPressed: _isLoading ? null : _submitForm,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: isLoading
+                  child: _isLoading
                       ? const SizedBox(
                           height: 24,
                           width: 24,
@@ -334,6 +282,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       : const Text('Register'),
                 ),
                 const SizedBox(height: 24),
+                
+                // Sign In Prompt
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -342,7 +292,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       style: theme.textTheme.bodyMedium,
                     ),
                     TextButton(
-                      onPressed: isLoading
+                      onPressed: _isLoading
                           ? null
                           : () => Navigator.pushReplacementNamed(context, '/login'),
                       child: const Text('Sign In'),

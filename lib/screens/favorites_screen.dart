@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import '../models/product.dart';
 import '../models/cart_item.dart';
 import '../providers/favorites_provider.dart';
-import '../providers/cart_provider.dart';
+import '../providers/cart_provider.dart' as cart_data;
 import '../widgets/product_card.dart';
 import 'cart_screen.dart';
 
@@ -14,8 +13,8 @@ class FavoritesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final favoritesAsync = ref.watch(favoritesProvider);
-    final cartItems = ref.watch(cartProvider);
-    final user = FirebaseAuth.instance.currentUser;
+  final cartItems = ref.watch(cart_data.cartProvider);
+    // TODO: Replace with your actual auth state management if needed
 
     return Scaffold(
       appBar: AppBar(
@@ -30,17 +29,16 @@ class FavoritesScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: user == null
-          ? _buildNotSignedInState(context)
-          : favoritesAsync.when(
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stack) => Center(child: Text('Error: $error')),
-              data: (favoriteProducts) {
-                return favoriteProducts.isEmpty
-                    ? _buildEmptyState(context)
-                    : _buildFavoritesGrid(context, favoriteProducts, ref, cartItems);
-              },
-            ),
+      body: favoritesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) => Center(child: Text('Error: $error')),
+        data: (favoriteProducts) {
+          return favoriteProducts.isEmpty
+              ? _buildEmptyState(context)
+              : _buildFavoritesGrid(
+                  context, favoriteProducts, ref, cartItems);
+        },
+      ),
     );
   }
 
@@ -72,7 +70,6 @@ class FavoritesScreen extends ConsumerWidget {
           ElevatedButton(
             onPressed: () {
               // Add your sign-in navigation logic here
-              // e.g., Navigator.push(context, MaterialPageRoute(builder: (_) => SignInScreen()));
             },
             child: const Text('Sign In'),
           ),
@@ -164,7 +161,7 @@ class FavoritesScreen extends ConsumerWidget {
                   .read(favoritesProvider.notifier)
                   .toggleFavorite(favorites[index]),
               onAddToCart: () {
-                ref.read(cartProvider.notifier).addToCart(favorites[index]);
+                ref.read(cart_data.cartProvider.notifier).addItem(favorites[index]);
                 _showAddedToCartSnackbar(context, favorites[index]);
               },
             ),

@@ -1,12 +1,114 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import '../models/cart_item.dart';
 import '../providers/cart_provider.dart';
 import '../widgets/payment_method_card.dart';
 import '../widgets/address_card.dart';
+
+// Order state notifier
+final orderProvider = StateNotifierProvider<OrderNotifier, OrderState>((ref) {
+  return OrderNotifier(ref);
+});
+
+class OrderNotifier extends StateNotifier<OrderState> {
+  final Ref ref;
+  
+  OrderNotifier(this.ref) : super(OrderState());
+
+  Future<void> placeOrder(List<CartItem> cartItems, String paymentMethod) async {
+    try {
+      state = state.copyWith(isProcessing: true, error: null);
+      
+      // Calculate order totals
+      final subtotal = cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
+      final shippingFee = 5.0;
+      final tax = subtotal * 0.1;
+      final total = subtotal + shippingFee + tax;
+
+      // Create order object
+      final order = Order(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        items: cartItems,
+        subtotal: subtotal,
+        shippingFee: shippingFee,
+        tax: tax,
+        total: total,
+        paymentMethod: paymentMethod,
+        date: DateTime.now(),
+        status: 'processing',
+      );
+
+      // In a real app, you would send this to your backend here
+      // await apiService.placeOrder(order);
+      
+      // Simulate network delay
+      await Future.delayed(const Duration(seconds: 2));
+
+      // Clear cart
+      ref.read(cartProvider.notifier).clearCart();
+
+      state = state.copyWith(
+        isProcessing: false,
+        lastOrder: order,
+      );
+    } catch (e) {
+      state = state.copyWith(
+        isProcessing: false,
+        error: 'Failed to place order: ${e.toString()}',
+      );
+      rethrow;
+    }
+  }
+}
+
+class OrderState {
+  final bool isProcessing;
+  final Order? lastOrder;
+  final String? error;
+
+  OrderState({
+    this.isProcessing = false,
+    this.lastOrder,
+    this.error,
+  });
+
+  OrderState copyWith({
+    bool? isProcessing,
+    Order? lastOrder,
+    String? error,
+  }) {
+    return OrderState(
+      isProcessing: isProcessing ?? this.isProcessing,
+      lastOrder: lastOrder ?? this.lastOrder,
+      error: error ?? this.error,
+    );
+  }
+}
+
+class Order {
+  final String id;
+  final List<CartItem> items;
+  final double subtotal;
+  final double shippingFee;
+  final double tax;
+  final double total;
+  final String paymentMethod;
+  final DateTime date;
+  final String status;
+
+  Order({
+    required this.id,
+    required this.items,
+    required this.subtotal,
+    required this.shippingFee,
+    required this.tax,
+    required this.total,
+    required this.paymentMethod,
+    required this.date,
+    required this.status,
+  });
+}
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -23,112 +125,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'Bank Transfer',
     'Cash on Delivery'
   ];
-  bool _isProcessingOrder = false;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-
-  double getSubtotal(List<CartItem> cartItems) {
-    return cartItems.fold(0, (sum, item) => sum + item.subtotal);
-  }
 
   @override
   Widget build(BuildContext context) {
     final cartItems = ref.watch(cartProvider);
-    final cartNotifier = ref.read(cartProvider.notifier);
+    final orderState = ref.watch(orderProvider);
+    final orderNotifier = ref.read(orderProvider.notifier);
     final theme = Theme.of(context);
     
-    final subtotal = getSubtotal(cartItems);
-    final shippingFee = 5.0; // Flat rate shipping
-    final tax = subtotal * 0.1; // 10% tax
+    final subtotal = cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
+    final shippingFee = 5.0;
+    final tax = subtotal * 0.1;
     final total = subtotal + shippingFee + tax;
 
-    Future<void> placeOrder() async {
-      if (cartItems.isEmpty || _isProcessingOrder) return;
-
-      setState(() => _isProcessingOrder = true);
-
-      try {
-        final user = _auth.currentUser;
-        if (user == null) {
-          throw Exception('User not authenticated');
-        }
-
-        // Create order document
-        final orderRef = _firestore.collection('orders').doc();
-        
-        // Prepare order data
-        final orderData = {
-          'userId': user.uid,
-          'orderId': orderRef.id,
-          'items': cartItems.map((item) => {
-            'productId': item.product.id,
-            'title': item.product.title,
-            'price': item.product.price,
-            'quantity': item.quantity,
-            'imageUrl': item.product.imageUrl,
-            'subtotal': item.subtotal,
-          }).toList(),
-          'subtotal': subtotal,
-          'shippingFee': shippingFee,
-          'tax': tax,
-          'total': total,
-          'paymentMethod': _paymentMethods[_selectedPaymentMethod],
-          'status': 'processing',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        };
-
-        // Write to Firestore
-        await orderRef.set(orderData);
-
-        // Clear cart
-        cartNotifier.clearCart();
-
-        if (!mounted) return;
-        
-        // Show success dialog
-        await showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => AlertDialog(
-            title: const Text('Order Successful'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Your order has been placed successfully.'),
-                const SizedBox(height: 16),
-                Text('Order ID: ${orderRef.id}'),
-                Text('Date: ${DateFormat('MMM dd, yyyy - hh:mm a').format(DateTime.now())}'),
-                Text('Total: \$${total.toStringAsFixed(2)}'),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
-                child: const Text('Back to Home'),
-              ),
-            ],
-          ),
-        );
-      } catch (e) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to place order: ${e.toString()}'),
-            action: SnackBarAction(
-              label: 'Retry',
-              onPressed: placeOrder,
-            ),
-          ),
-        );
-      } finally {
-        if (mounted) {
-          setState(() => _isProcessingOrder = false);
-        }
-      }
+    // Show order success dialog if needed
+    if (orderState.lastOrder != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showOrderSuccessDialog(context, orderState.lastOrder!);
+        // Reset order state after showing dialog
+        ref.read(orderProvider.notifier).state = OrderState();
+      });
     }
 
     return Scaffold(
@@ -136,7 +152,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         title: const Text('Checkout'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: _isProcessingOrder ? null : () => Navigator.of(context).pop(),
+          onPressed: orderState.isProcessing ? null : () => Navigator.of(context).pop(),
         ),
       ),
       body: SingleChildScrollView(
@@ -157,7 +173,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 (index) => PaymentMethodCard(
                   method: _paymentMethods[index],
                   isSelected: _selectedPaymentMethod == index,
-                  onSelected: _isProcessingOrder 
+                  onSelected: orderState.isProcessing 
                       ? null 
                       : () => setState(() => _selectedPaymentMethod = index),
                 ),
@@ -192,7 +208,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: _buildCheckoutButton(cartItems, total, theme, placeOrder),
+      bottomNavigationBar: _buildCheckoutButton(
+        cartItems, 
+        total, 
+        theme, 
+        orderState,
+        () => orderNotifier.placeOrder(
+          cartItems, 
+          _paymentMethods[_selectedPaymentMethod],
+        ),
+      ),
     );
   }
 
@@ -235,6 +260,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     List<CartItem> cartItems, 
     double total, 
     ThemeData theme,
+    OrderState orderState,
     VoidCallback onPlaceOrder,
   ) {
     return Container(
@@ -258,13 +284,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           backgroundColor: theme.primaryColor,
           foregroundColor: theme.colorScheme.onPrimary,
         ),
-        onPressed: _isProcessingOrder || cartItems.isEmpty 
+        onPressed: orderState.isProcessing || cartItems.isEmpty 
             ? null 
             : onPlaceOrder,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (_isProcessingOrder)
+            if (orderState.isProcessing)
               const Padding(
                 padding: EdgeInsets.only(right: 8),
                 child: SizedBox(
@@ -276,8 +302,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                 ),
               ),
-            Text(_isProcessingOrder ? 'Processing...' : 'Place Order'),
-            if (!_isProcessingOrder) ...[
+            Text(orderState.isProcessing ? 'Processing...' : 'Place Order'),
+            if (!orderState.isProcessing) ...[
               const SizedBox(width: 8),
               Text(
                 '\$${total.toStringAsFixed(2)}',
@@ -286,6 +312,35 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  Future<void> _showOrderSuccessDialog(BuildContext context, Order order) async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Order Successful'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Your order has been placed successfully.'),
+            const SizedBox(height: 16),
+            Text('Order ID: ${order.id}'),
+            Text('Date: ${DateFormat('MMM dd, yyyy - hh:mm a').format(order.date)}'),
+            Text('Total: \$${order.total.toStringAsFixed(2)}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).popUntil((route) => route.isFirst);
+            },
+            child: const Text('Back to Home'),
+          ),
+        ],
       ),
     );
   }

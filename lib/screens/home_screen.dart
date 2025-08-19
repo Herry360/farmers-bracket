@@ -1,34 +1,20 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart'; // Required for ScrollDirection
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:badges/badges.dart' as badges; // Added for Badge widget
+import 'package:badges/badges.dart' as badges;
 import '../models/farm.dart' as farm_model;
-import '../models/product.dart';
-import '../widgets/farm_card.dart';
 import 'farm_products_screen.dart';
 import 'cart_screen.dart';
 import 'map_screen.dart';
+import '../providers/farms_provider.dart';
+import '../providers/cart_count_provider.dart';
+import '../widgets/farm_card.dart';
+// HomeScreenFilterProvider, HomeScreenFilterState, HomeScreenFilterNotifier, SortOption are missing, define them below if not imported
+// ScrollDirection is missing, import from widgets
+import 'package:flutter/widgets.dart';
 
-// ================== State Management ================== //
-
+// Temporary definitions if not imported (replace with actual imports if available)
 enum SortOption { distance, rating, name }
-
-// Define Riverpod providers
-final homeScreenFilterProvider =
-    StateNotifierProvider<HomeScreenFilterNotifier, HomeScreenFilterState>(
-  (ref) => HomeScreenFilterNotifier(),
-);
-
-final farmsProvider = StateNotifierProvider<FarmsNotifier, FarmsState>(
-  (ref) => FarmsNotifier(),
-);
-
-final cartCountProvider = StateNotifierProvider<CartCountNotifier, CartCountState>(
-  (ref) => CartCountNotifier(),
-);
 
 class HomeScreenFilterState {
   final String category;
@@ -38,8 +24,7 @@ class HomeScreenFilterState {
   final double maxDistance;
   final bool showFavoritesOnly;
   final SortOption sortOption;
-
-  const HomeScreenFilterState({
+  HomeScreenFilterState({
     this.category = 'All',
     this.searchQuery = '',
     this.location = 'All',
@@ -48,227 +33,38 @@ class HomeScreenFilterState {
     this.showFavoritesOnly = false,
     this.sortOption = SortOption.distance,
   });
-
-  HomeScreenFilterState copyWith({
-    String? category,
-    String? searchQuery,
-    String? location,
-    String? rating,
-    double? maxDistance,
-    bool? showFavoritesOnly,
-    SortOption? sortOption,
-  }) {
-    return HomeScreenFilterState(
-      category: category ?? this.category,
-      searchQuery: searchQuery ?? this.searchQuery,
-      location: location ?? this.location,
-      rating: rating ?? this.rating,
-      maxDistance: maxDistance ?? this.maxDistance,
-      showFavoritesOnly: showFavoritesOnly ?? this.showFavoritesOnly,
-      sortOption: sortOption ?? this.sortOption,
-    );
-  }
 }
 
-class HomeScreenFilterNotifier extends StateNotifier<HomeScreenFilterState> {
-  HomeScreenFilterNotifier() : super(const HomeScreenFilterState());
-
-  void resetFilters() {
-    state = const HomeScreenFilterState();
-  }
-
-  void setCategory(String category) {
-    state = state.copyWith(category: category);
-  }
-
+class HomeScreenFilterNotifier extends ChangeNotifier {
+  HomeScreenFilterState _state = HomeScreenFilterState();
+  HomeScreenFilterState get state => _state;
   void setSearchQuery(String query) {
-    state = state.copyWith(searchQuery: query);
+    _state = HomeScreenFilterState(searchQuery: query);
+    notifyListeners();
   }
-
   void setLocation(String location) {
-    state = state.copyWith(location: location);
+    _state = HomeScreenFilterState(location: location);
+    notifyListeners();
   }
-
   void setRating(String rating) {
-    state = state.copyWith(rating: rating);
+    _state = HomeScreenFilterState(rating: rating);
+    notifyListeners();
   }
-
   void setMaxDistance(double distance) {
-    state = state.copyWith(maxDistance: distance);
+    _state = HomeScreenFilterState(maxDistance: distance);
+    notifyListeners();
   }
-
   void toggleFavorites() {
-    state = state.copyWith(showFavoritesOnly: !state.showFavoritesOnly);
+    _state = HomeScreenFilterState(showFavoritesOnly: !_state.showFavoritesOnly);
+    notifyListeners();
   }
-
-  void setSortOption(SortOption option) {
-    state = state.copyWith(sortOption: option);
-  }
-}
-
-class FarmsState {
-  final List<farm_model.Farm> farms;
-  final bool isLoading;
-  final String? error;
-
-  const FarmsState({
-    this.farms = const [],
-    this.isLoading = false,
-    this.error,
-  });
-
-  FarmsState copyWith({
-    List<farm_model.Farm>? farms,
-    bool? isLoading,
-    String? error,
-  }) {
-    return FarmsState(
-      farms: farms ?? this.farms,
-      isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
-    );
+  void resetFilters() {
+    _state = HomeScreenFilterState();
+    notifyListeners();
   }
 }
 
-class FarmsNotifier extends StateNotifier<FarmsState> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
-  FarmsNotifier() : super(const FarmsState()) {
-    loadFarms();
-  }
-
-  Future<void> loadFarms() async {
-    try {
-      state = state.copyWith(isLoading: true, error: null);
-
-      final QuerySnapshot snapshot = await _firestore
-          .collection('farms')
-          .limit(20) // Basic pagination
-          .get();
-
-      final farms = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return farm_model.Farm(
-          id: doc.id,
-          name: data['name'] as String? ?? 'Unknown Farm',
-          location: data['location'] as String? ?? 'Unknown Location',
-          imageUrl: data['imageUrl'] as String? ?? '',
-          category: data['category'] as String? ?? 'General',
-          description: data['description'] as String? ?? 'No description available',
-          rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
-          distance: (data['distance'] as num?)?.toDouble() ?? 0.0,
-          isFavorite: data['isFavorite'] as bool? ?? false,
-          products: (data['products'] as List<dynamic>? ?? []).map((product) {
-            final productData = product as Map<String, dynamic>;
-            return Product(
-              id: productData['id'] as String? ?? '',
-              title: productData['title'] as String? ?? 'Unknown Product',
-              price: (productData['price'] as num?)?.toDouble() ?? 0.0,
-              unit: productData['unit'] as String? ?? 'unit',
-              imageUrl: productData['imageUrl'] as String? ?? '',
-              description: productData['description'] as String? ?? '',
-              category: productData['category'] as String? ?? '',
-              farmId: productData['farmId'] as String? ?? '',
-            );
-          }).toList(),
-          geoPoint: data['geoPoint'] as GeoPoint? ?? const GeoPoint(0, 0),
-        );
-      }).toList();
-
-      state = state.copyWith(farms: farms, isLoading: false);
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: 'Failed to load farms: $e');
-    }
-  }
-
-  Future<void> toggleFavorite(String farmId) async {
-    try {
-      final farmIndex = state.farms.indexWhere((farm) => farm.id == farmId);
-      if (farmIndex != -1) {
-        final updatedFarm = state.farms[farmIndex].copyWith(
-          isFavorite: !state.farms[farmIndex].isFavorite,
-        );
-
-        await _firestore.collection('farms').doc(farmId).update({
-          'isFavorite': updatedFarm.isFavorite,
-        });
-
-        final updatedFarms = List<farm_model.Farm>.from(state.farms);
-        updatedFarms[farmIndex] = updatedFarm;
-        state = state.copyWith(farms: updatedFarms);
-      }
-    } catch (e) {
-      state = state.copyWith(error: 'Failed to update favorite status: $e');
-    }
-  }
-
-  Future<void> refresh() async {
-    await loadFarms();
-  }
-}
-
-class CartCountState {
-  final int count;
-
-  const CartCountState({this.count = 0});
-}
-
-class CartCountNotifier extends StateNotifier<CartCountState> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-  String? _userId;
-
-  CartCountNotifier() : super(const CartCountState());
-
-  void setUserId(String userId) {
-    _userId = userId;
-    _loadCartCount();
-  }
-
-  Future<void> _loadCartCount() async {
-    if (_userId == null) return;
-
-    try {
-      final doc = await _firestore.collection('users').doc(_userId).get();
-      if (doc.exists) {
-        state = CartCountState(count: doc.data()?['cartCount'] as int? ?? 0);
-      }
-    } catch (e) {
-      debugPrint('Error loading cart count: $e');
-    }
-  }
-
-  Future<void> _updateCartCount() async {
-    if (_userId == null) return;
-
-    try {
-      await _firestore.collection('users').doc(_userId).set({
-        'cartCount': state.count,
-        'lastUpdated': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true)); // Use set with merge to avoid overwriting
-    } catch (e) {
-      debugPrint('Error updating cart count: $e');
-    }
-  }
-
-  Future<void> increment() async {
-    state = CartCountState(count: state.count + 1);
-    await _updateCartCount();
-  }
-
-  Future<void> decrement() async {
-    if (state.count > 0) {
-      state = CartCountState(count: state.count - 1);
-      await _updateCartCount();
-    }
-  }
-
-  Future<void> reset() async {
-    state = CartCountState(count: 0);
-    await _updateCartCount();
-  }
-}
-
-// ================== Main Screen ================== //
+final homeScreenFilterProvider = ChangeNotifierProvider<HomeScreenFilterNotifier>((ref) => HomeScreenFilterNotifier());
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -285,13 +81,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController = ScrollController()..addListener(_scrollListener);
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final farmsNotifier = ref.read(farmsProvider.notifier);
-      if (ref.read(farmsProvider).farms.isEmpty) {
-        farmsNotifier.loadFarms();
-      }
-    });
+    _loadInitialData();
   }
 
   @override
@@ -300,10 +90,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
+  Future<void> _loadInitialData() async {
+    final farmsNotifier = ref.read(farmsProvider.notifier);
+    final farmsState = ref.read(farmsProvider);
+    farmsState.when(
+      data: (farms) async {
+        if (farms.isEmpty) {
+          await farmsNotifier.loadFarms();
+        }
+      },
+      loading: () {},
+      error: (_, __) {},
+    );
+  }
+
   void _scrollListener() {
-    if (_scrollController.position.userScrollDirection == ScrollDirection.forward) {
+    if (_scrollController.position.userScrollDirection == AxisDirection.down) {
       if (!_showFab && mounted) setState(() => _showFab = true);
-    } else if (_scrollController.position.userScrollDirection == ScrollDirection.reverse) {
+    } else if (_scrollController.position.userScrollDirection == AxisDirection.up) {
       if (_showFab && mounted) setState(() => _showFab = false);
     }
   }
@@ -312,107 +116,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('FarmersBracket'),
+        title: const Text('FarmersBracket', style: TextStyle(fontWeight: FontWeight.bold)),
+        centerTitle: false,
         actions: [
-          Consumer(
-            builder: (context, ref, _) {
-              final cartCount = ref.watch(cartCountProvider).count;
-              return IconButton(
-                icon: badges.Badge(
-                  badgeContent: cartCount > 0 ? Text('$cartCount') : null,
-                  showBadge: cartCount > 0,
-                  child: const Icon(Icons.shopping_cart),
-                ),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const CartScreen()),
-                  );
-                },
-              );
-            },
-          ),
-          Consumer(
-            builder: (context, ref, _) {
-              final showFavorites = ref.watch(homeScreenFilterProvider).showFavoritesOnly;
-              return IconButton(
-                icon: Icon(
-                  showFavorites ? Icons.favorite : Icons.favorite_border,
-                  color: showFavorites ? Colors.red : null,
-                ),
-                onPressed: () => ref.read(homeScreenFilterProvider.notifier).toggleFavorites(),
-              );
-            },
-          ),
+          _buildCartButton(),
+          _buildFavoritesFilterButton(),
         ],
       ),
-      body: NotificationListener<ScrollNotification>(
-        onNotification: (notification) {
-          if (notification is UserScrollNotification) {
-            _scrollListener();
-          }
-          return false;
-        },
-        child: Consumer(
-          builder: (context, ref, _) {
-            final farmsState = ref.watch(farmsProvider);
-            final filterState = ref.watch(homeScreenFilterProvider);
-            return _buildBodyContent(farmsState, filterState, Theme.of(context));
-          },
-        ),
-      ),
-      floatingActionButton: AnimatedSlide(
-        duration: const Duration(milliseconds: 300),
-        offset: _showFab ? Offset.zero : const Offset(0, 2),
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 300),
-          opacity: _showFab ? 1 : 0,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FloatingActionButton(
-                heroTag: 'filter',
-                onPressed: () {
-                  _showAdvancedFilterDialog(context, ref);
-                },
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                child: const Icon(Icons.filter_alt, color: Colors.white),
-              ),
-              const SizedBox(height: 12),
-              FloatingActionButton(
-                heroTag: 'map',
-                onPressed: () {
-                  final filteredFarms = _filterAndSortFarms(
-                    ref.read(farmsProvider).farms,
-                    ref.read(homeScreenFilterProvider),
-                  );
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => MapScreen(farms: filteredFarms),
-                    ),
-                  );
-                },
-                backgroundColor: Theme.of(context).colorScheme.secondary,
-                child: const Icon(Icons.map, color: Colors.white),
-              ),
-            ],
-          ),
-        ),
-      ),
+      body: _buildBodyContent(),
+      floatingActionButton: _buildFloatingActionButtons(),
     );
   }
 
-  Widget _buildBodyContent(FarmsState farmsState, HomeScreenFilterState filterState, ThemeData theme) {
-    if (farmsState.isLoading) {
-      return _buildShimmerLoader();
-    }
+  Widget _buildCartButton() {
+    return Consumer(
+      builder: (context, ref, _) {
+  final cartCount = ref.watch(cartCountProvider);
+        return IconButton(
+          icon: badges.Badge(
+            badgeStyle: badges.BadgeStyle(
+              badgeColor: Colors.redAccent,
+              padding: const EdgeInsets.all(6),
+            ),
+            badgeContent: Text(
+              '$cartCount',
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+            ),
+            showBadge: cartCount > 0,
+            child: const Icon(Icons.shopping_cart_outlined),
+          ),
+          onPressed: () => Navigator.push(context, 
+              MaterialPageRoute(builder: (_) => const CartScreen())),
+        );
+      },
+    );
+  }
 
-    if (farmsState.error != null) {
-      return _buildErrorWidget(farmsState.error!);
-    }
+  Widget _buildFavoritesFilterButton() {
+    return Consumer(
+      builder: (context, ref, _) {
+  final filterNotifier = ref.watch(homeScreenFilterProvider);
+  final showFavorites = filterNotifier.state.showFavoritesOnly;
+        return IconButton(
+          icon: Icon(
+            showFavorites ? Icons.favorite : Icons.favorite_border,
+            color: showFavorites ? Colors.redAccent : null,
+          ),
+          onPressed: () => ref.read(homeScreenFilterProvider.notifier).toggleFavorites(),
+        );
+      },
+    );
+  }
 
-    return _buildFarmList(farmsState.farms, filterState, theme);
+  Widget _buildBodyContent() {
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is UserScrollNotification) {
+          _scrollListener();
+        }
+        return false;
+      },
+      child: Consumer(
+        builder: (context, ref, _) {
+          final farmsState = ref.watch(farmsProvider);
+          final filterNotifier = ref.watch(homeScreenFilterProvider);
+          final filterState = filterNotifier.state;
+          
+          return farmsState.when(
+            loading: () => _buildShimmerLoader(),
+            error: (err, _) => _buildErrorWidget(err.toString()),
+            data: (farms) => _buildFarmList(farms, filterState),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildShimmerLoader() {
@@ -428,7 +205,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           mainAxisSpacing: 16,
         ),
         itemCount: 6,
-        itemBuilder: (_, _) => Container(
+        itemBuilder: (_, __) => Container(
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
@@ -443,26 +220,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
           const SizedBox(height: 16),
-          Text('Failed to load farms', style: Theme.of(context).textTheme.titleMedium),
+          Text('Failed to load farms', 
+              style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: () {
-              ref.read(farmsProvider.notifier).refresh();
-            },
+            onPressed: () => ref.read(farmsProvider.notifier).refresh(),
             child: const Text('Retry'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFarmList(List<farm_model.Farm> farms, HomeScreenFilterState filterState, ThemeData theme) {
+  Widget _buildFarmList(List<farm_model.Farm> farms, HomeScreenFilterState filterState) {
     final filteredFarms = _filterAndSortFarms(farms, filterState);
 
     return RefreshIndicator(
       onRefresh: () => ref.read(farmsProvider.notifier).refresh(),
+      color: Theme.of(context).colorScheme.primary,
       child: CustomScrollView(
         controller: _scrollController,
         physics: const AlwaysScrollableScrollPhysics(),
@@ -472,117 +252,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             pinned: true,
             collapsedHeight: 180,
             expandedHeight: 180,
-            flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    theme.colorScheme.primary.withAlpha(25),
-                    Colors.transparent,
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    TextField(
-                      decoration: const InputDecoration(
-                        hintText: 'Search farms...',
-                        prefixIcon: Icon(Icons.search),
-                        border: OutlineInputBorder(),
-                      ),
-                      onChanged: ref.read(homeScreenFilterProvider.notifier).setSearchQuery,
-                    ),
-                    const SizedBox(height: 12),
-                    Consumer(
-                      builder: (context, ref, _) {
-                        final filterState = ref.watch(homeScreenFilterProvider);
-                        final notifier = ref.read(homeScreenFilterProvider.notifier);
-                        return SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              FilterChip(
-                                label: Text('${filterState.maxDistance.round()} km'),
-                                avatar: const Icon(Icons.location_on, size: 18),
-                                onSelected: (_) => _showDistanceDialog(context, ref, notifier, filterState),
-                                selected: filterState.maxDistance != 50.0,
-                                backgroundColor: Colors.white,
-                                selectedColor: theme.colorScheme.primary.withAlpha(51),
-                                shape: StadiumBorder(
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              FilterChip(
-                                label: Text(filterState.location),
-                                avatar: const Icon(Icons.pin_drop, size: 18),
-                                onSelected: (_) => _showLocationDialog(context, ref, notifier, filterState),
-                                selected: filterState.location != 'All',
-                                backgroundColor: Colors.white,
-                                selectedColor: theme.colorScheme.primary.withAlpha(51),
-                                shape: StadiumBorder(
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              FilterChip(
-                                label: Text(filterState.rating),
-                                avatar: const Icon(Icons.star, size: 18),
-                                onSelected: (_) => _showRatingDialog(context, ref, notifier, filterState),
-                                selected: filterState.rating != 'All',
-                                backgroundColor: Colors.white,
-                                selectedColor: theme.colorScheme.primary.withAlpha(51),
-                                shape: StadiumBorder(
-                                  side: BorderSide(color: Colors.grey.shade300),
-                                ),
-                              ),
-                              if (filterState.showFavoritesOnly) ...[
-                                const SizedBox(width: 8),
-                                FilterChip(
-                                  label: const Text('Favorites'),
-                                  avatar: const Icon(Icons.favorite, size: 18),
-                                  onSelected: (_) => notifier.toggleFavorites(),
-                                  selected: true,
-                                  backgroundColor: Colors.white,
-                                  selectedColor: theme.colorScheme.primary.withAlpha(51),
-                                  shape: StadiumBorder(
-                                    side: BorderSide(color: Colors.grey.shade300),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
+            flexibleSpace: _buildSearchAndFilterSection(),
           ),
           if (filteredFarms.isEmpty)
             SliverFillRemaining(
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.search_off, size: 48, color: Colors.grey),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No farms match your filters',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 8),
-                    TextButton(
-                      onPressed: ref.read(homeScreenFilterProvider.notifier).resetFilters,
-                      child: const Text('Reset filters'),
-                    ),
-                  ],
-                ),
-              ),
+              child: _buildEmptyState(),
             )
           else
             SliverPadding(
@@ -597,21 +271,227 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 delegate: SliverChildBuilderDelegate(
                   (context, index) => FarmCard(
                     farm: filteredFarms[index],
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => FarmProductsScreen(farm: filteredFarms[index]),
-                        ),
-                      );
-                    },
-                    farmId: filteredFarms[index].id,
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FarmProductsScreen(farm: filteredFarms[index]),
+                      ),
+                    ),
                   ),
                   childCount: filteredFarms.length,
                 ),
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildSearchAndFilterSection() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            Theme.of(context).colorScheme.primary.withOpacity(0.05),
+            Colors.transparent,
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildSearchField(),
+            const SizedBox(height: 12),
+            _buildFilterChips(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return TextField(
+      decoration: InputDecoration(
+        hintText: 'Search farms...',
+        prefixIcon: const Icon(Icons.search),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(vertical: 12),
+      ),
+      onChanged: (value) => ref.read(homeScreenFilterProvider.notifier).setSearchQuery(value),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    return Consumer(
+      builder: (context, ref, _) {
+        final filterNotifier = ref.watch(homeScreenFilterProvider);
+        final filterState = filterNotifier.state;
+        final notifier = ref.read(homeScreenFilterProvider.notifier);
+        return SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              _buildDistanceChip(filterState, notifier),
+              const SizedBox(width: 8),
+              _buildLocationChip(filterState, notifier),
+              const SizedBox(width: 8),
+              _buildRatingChip(filterState, notifier),
+              if (filterState.showFavoritesOnly) ...[
+                const SizedBox(width: 8),
+                _buildFavoriteChip(notifier),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildDistanceChip(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    return FilterChip(
+      label: Text('${state.maxDistance.round()} km'),
+      avatar: const Icon(Icons.location_on, size: 18),
+      onSelected: (_) => _showDistanceDialog(context, ref, notifier, state),
+      selected: state.maxDistance != 50.0,
+      backgroundColor: Colors.white,
+      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+      shape: StadiumBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      labelStyle: TextStyle(
+        color: state.maxDistance != 50.0 
+            ? Theme.of(context).colorScheme.primary 
+            : Colors.grey[800],
+      ),
+    );
+  }
+
+  Widget _buildLocationChip(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    return FilterChip(
+      label: Text(state.location),
+      avatar: const Icon(Icons.pin_drop, size: 18),
+      onSelected: (_) => _showLocationDialog(context, ref, notifier, state),
+      selected: state.location != 'All',
+      backgroundColor: Colors.white,
+      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+      shape: StadiumBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      labelStyle: TextStyle(
+        color: state.location != 'All'
+            ? Theme.of(context).colorScheme.primary
+            : Colors.grey[800],
+      ),
+    );
+  }
+
+  Widget _buildRatingChip(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    return FilterChip(
+      label: Text(state.rating),
+      avatar: const Icon(Icons.star, size: 18),
+      onSelected: (_) => _showRatingDialog(context, ref, notifier, state),
+      selected: state.rating != 'All',
+      backgroundColor: Colors.white,
+      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+      shape: StadiumBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      labelStyle: TextStyle(
+        color: state.rating != 'All'
+            ? Theme.of(context).colorScheme.primary
+            : Colors.grey[800],
+      ),
+    );
+  }
+
+  Widget _buildFavoriteChip(HomeScreenFilterNotifier notifier) {
+    return FilterChip(
+      label: const Text('Favorites'),
+      avatar: const Icon(Icons.favorite, size: 18, color: Colors.redAccent),
+      onSelected: (_) => notifier.toggleFavorites(),
+      selected: true,
+      backgroundColor: Colors.white,
+      selectedColor: Colors.redAccent.withOpacity(0.1),
+      shape: StadiumBorder(
+        side: BorderSide(color: Colors.grey.shade300),
+      ),
+      labelStyle: const TextStyle(color: Colors.redAccent),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+          const SizedBox(height: 16),
+          Text(
+            'No farms match your filters',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: ref.read(homeScreenFilterProvider.notifier).resetFilters,
+            child: const Text('Reset filters'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFloatingActionButtons() {
+    return AnimatedSlide(
+      duration: const Duration(milliseconds: 300),
+      offset: _showFab ? Offset.zero : const Offset(0, 2),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: _showFab ? 1 : 0,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            FloatingActionButton(
+              heroTag: 'filter',
+              onPressed: () => _showAdvancedFilterDialog(context, ref),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              child: const Icon(Icons.filter_alt, color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            FloatingActionButton(
+              heroTag: 'map',
+              onPressed: () {
+                final farmsState = ref.read(farmsProvider);
+                final filterNotifier = ref.read(homeScreenFilterProvider);
+                farmsState.when(
+                  data: (farms) {
+                    final filteredFarms = _filterAndSortFarms(farms, filterNotifier.state);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => MapScreen(farms: filteredFarms),
+                      ),
+                    );
+                  },
+                  loading: () {},
+                  error: (_, __) {},
+                );
+              },
+              backgroundColor: Theme.of(context).colorScheme.secondary,
+              child: const Icon(Icons.map, color: Colors.white),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -649,9 +529,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _showAdvancedFilterDialog(BuildContext context, WidgetRef ref) async {
-    final locations = ['All', 'California, USA', 'Texas, USA', 'Colorado, USA'];
-    final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
-
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -659,7 +536,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       builder: (context) {
         return Consumer(
           builder: (context, ref, _) {
-            final filterState = ref.watch(homeScreenFilterProvider);
+            final filterNotifier = ref.watch(homeScreenFilterProvider);
+            final filterState = filterNotifier.state;
             final notifier = ref.read(homeScreenFilterProvider.notifier);
             return Container(
               decoration: BoxDecoration(
@@ -672,149 +550,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 8),
-                    width: 40,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[400],
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Advanced Filters', style: Theme.of(context).textTheme.titleLarge),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                  ),
+                  _buildFilterDialogHandle(),
+                  _buildFilterDialogHeader(context),
                   const Divider(height: 0),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Location', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: filterState.location,
-                          items: locations.map((location) {
-                            return DropdownMenuItem(
-                              value: location,
-                              child: Text(location),
-                            );
-                          }).toList(),
-                          onChanged: (value) => notifier.setLocation(value!),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          isExpanded: true,
-                        ),
-                      ],
+                  Expanded(
+                    child: SingleChildScrollView(
+                      child: Column(
+                        children: [
+                          _buildLocationFilterSection(filterState, notifier),
+                          _buildRatingFilterSection(filterState, notifier),
+                          _buildDistanceFilterSection(filterState, notifier),
+                          _buildOptionsSection(filterState, notifier),
+                        ],
+                      ),
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Minimum Rating', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        DropdownButtonFormField<String>(
-                          value: filterState.rating,
-                          items: ratings.map((rating) {
-                            return DropdownMenuItem(
-                              value: rating,
-                              child: Text(rating),
-                            );
-                          }).toList(),
-                          onChanged: (value) => notifier.setRating(value!),
-                          decoration: const InputDecoration(
-                            border: OutlineInputBorder(),
-                            contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          ),
-                          isExpanded: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Max Distance (${filterState.maxDistance.round()} km)',
-                            style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Slider(
-                          value: filterState.maxDistance,
-                          min: 5,
-                          max: 100,
-                          divisions: 19,
-                          label: '${filterState.maxDistance.round()} km',
-                          onChanged: notifier.setMaxDistance,
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Options', style: Theme.of(context).textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        SwitchListTile(
-                          title: const Text('Show Favorites Only'),
-                          value: filterState.showFavoritesOnly,
-                          onChanged: (_) => notifier.toggleFavorites(),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              notifier.resetFilters();
-                              Navigator.pop(context);
-                            },
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              side: BorderSide(color: Theme.of(context).colorScheme.primary),
-                            ),
-                            child: Text(
-                              'Reset All',
-                              style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () => Navigator.pop(context),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                            ),
-                            child: const Text('Apply Filters'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
+                  _buildFilterActionButtons(notifier),
                 ],
               ),
             );
@@ -824,9 +575,199 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
+  Widget _buildFilterDialogHandle() {
+    return Container(
+      margin: const EdgeInsets.only(top: 12, bottom: 8),
+      width: 40,
+      height: 4,
+      decoration: BoxDecoration(
+        color: Colors.grey[400],
+        borderRadius: BorderRadius.circular(2),
+      ),
+    );
+  }
+
+  Widget _buildFilterDialogHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Advanced Filters', style: Theme.of(context).textTheme.titleLarge),
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLocationFilterSection(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    final locations = ['All', 'California, USA', 'Texas, USA', 'Colorado, USA'];
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Location', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: state.location,
+            items: locations.map((location) {
+              return DropdownMenuItem(
+                value: location,
+                child: Text(location),
+              );
+            }).toList(),
+            onChanged: (value) => notifier.setLocation(value!),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade400),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              filled: true,
+              fillColor: Colors.grey[50],
+            ),
+            isExpanded: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRatingFilterSection(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Minimum Rating', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            value: state.rating,
+            items: ratings.map((rating) {
+              return DropdownMenuItem(
+                value: rating,
+                child: Text(rating),
+              );
+            }).toList(),
+            onChanged: (value) => notifier.setRating(value!),
+            decoration: InputDecoration(
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide(color: Colors.grey.shade400),
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              filled: true,
+              fillColor: Colors.grey[50],
+            ),
+            isExpanded: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDistanceFilterSection(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Max Distance (${state.maxDistance.round()} km)',
+              style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Slider(
+            value: state.maxDistance,
+            min: 5,
+            max: 100,
+            divisions: 19,
+            label: '${state.maxDistance.round()} km',
+            onChanged: notifier.setMaxDistance,
+            activeColor: Theme.of(context).colorScheme.primary,
+            inactiveColor: Colors.grey[300],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOptionsSection(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Options', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            title: const Text('Show Favorites Only'),
+            value: state.showFavoritesOnly,
+            onChanged: (_) => notifier.toggleFavorites(),
+            contentPadding: EdgeInsets.zero,
+            activeColor: Theme.of(context).colorScheme.primary,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterActionButtons(HomeScreenFilterNotifier notifier) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () {
+                notifier.resetFilters();
+                Navigator.pop(context);
+              },
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Reset All',
+                style: TextStyle(color: Theme.of(context).colorScheme.primary),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text('Apply Filters', style: TextStyle(color: Colors.white)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _showDistanceDialog(
-      BuildContext context, WidgetRef ref, HomeScreenFilterNotifier notifier, HomeScreenFilterState state) async {
+    BuildContext context, 
+    WidgetRef ref, 
+    HomeScreenFilterNotifier notifier, 
+    HomeScreenFilterState state
+  ) async {
     double tempDistance = state.maxDistance;
+    
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -841,6 +782,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               divisions: 19,
               label: '${tempDistance.round()} km',
               onChanged: (value) => setState(() => tempDistance = value),
+              activeColor: Theme.of(context).colorScheme.primary,
             ),
           ],
         ),
@@ -862,23 +804,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _showLocationDialog(
-      BuildContext context, WidgetRef ref, HomeScreenFilterNotifier notifier, HomeScreenFilterState state) async {
+    BuildContext context, 
+    WidgetRef ref, 
+    HomeScreenFilterNotifier notifier, 
+    HomeScreenFilterState state
+  ) async {
     final locations = ['All', 'California, USA', 'Texas, USA', 'Colorado, USA'];
     String? selectedLocation = state.location;
+    
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Select Location'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: locations
-              .map((location) => RadioListTile<String>(
-                    title: Text(location),
-                    value: location,
-                    groupValue: selectedLocation,
-                    onChanged: (value) => setState(() => selectedLocation = value),
-                  ))
-              .toList(),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: locations
+                .map((location) => RadioListTile<String>(
+                      title: Text(location),
+                      value: location,
+                      groupValue: selectedLocation,
+                      onChanged: (value) => setState(() => selectedLocation = value),
+                      activeColor: Theme.of(context).colorScheme.primary,
+                    ))
+                .toList(),
+          ),
         ),
         actions: [
           TextButton(
@@ -900,23 +851,32 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _showRatingDialog(
-      BuildContext context, WidgetRef ref, HomeScreenFilterNotifier notifier, HomeScreenFilterState state) async {
+    BuildContext context, 
+    WidgetRef ref, 
+    HomeScreenFilterNotifier notifier, 
+    HomeScreenFilterState state
+  ) async {
     final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
     String? selectedRating = state.rating;
+    
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Select Minimum Rating'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: ratings
-              .map((rating) => RadioListTile<String>(
-                    title: Text(rating),
-                    value: rating,
-                    groupValue: selectedRating,
-                    onChanged: (value) => setState(() => selectedRating = value),
-                  ))
-              .toList(),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView(
+            shrinkWrap: true,
+            children: ratings
+                .map((rating) => RadioListTile<String>(
+                      title: Text(rating),
+                      value: rating,
+                      groupValue: selectedRating,
+                      onChanged: (value) => setState(() => selectedRating = value),
+                      activeColor: Theme.of(context).colorScheme.primary,
+                    ))
+                .toList(),
+          ),
         ),
         actions: [
           TextButton(

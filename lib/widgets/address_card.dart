@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AddressCard extends StatefulWidget {
-  final String? userId;
   final VoidCallback? onEditPressed;
+  final Map<String, dynamic>? initialAddress;
 
   const AddressCard({
     super.key,
-    this.userId,
     this.onEditPressed,
+    this.initialAddress,
   });
 
   @override
@@ -16,54 +15,14 @@ class AddressCard extends StatefulWidget {
 }
 
 class _AddressCardState extends State<AddressCard> {
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   Map<String, dynamic>? _address;
-  bool _isLoading = true;
+  bool _isLoading = false;
   bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchAddress();
-  }
-
-  Future<void> _fetchAddress() async {
-    if (widget.userId == null) return;
-
-    setState(() {
-      _isLoading = true;
-      _hasError = false;
-    });
-
-    try {
-      final doc = await _firestore
-          .collection('addresses')
-          .doc(widget.userId!)
-          .get();
-
-      if (doc.exists) {
-        setState(() {
-          _address = doc.data();
-        });
-      } else {
-        setState(() {
-          _address = null;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        _hasError = true;
-      });
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error fetching address: ${e.toString()}')),
-        );
-      }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
+    _address = widget.initialAddress;
   }
 
   @override
@@ -130,15 +89,22 @@ class _AddressCardState extends State<AddressCard> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_address?['full_name'] != null) Text(_address!['full_name']),
-                  if (_address?['street_address'] != null) Text(_address!['street_address']),
-                  if (_address?['apartment'] != null) Text(_address!['apartment']!),
+                  if (_address?['full_name'] != null) 
+                    Text(_address!['full_name'], style: theme.textTheme.bodyLarge),
+                  const SizedBox(height: 4),
+                  if (_address?['street_address'] != null) 
+                    Text(_address!['street_address'], style: theme.textTheme.bodyMedium),
+                  if (_address?['apartment'] != null) 
+                    Text(_address!['apartment']!, style: theme.textTheme.bodyMedium),
                   if (_address?['city'] != null && _address?['postal_code'] != null)
-                    Text('${_address!['city']}, ${_address!['postal_code']}'),
-                  if (_address?['country'] != null) Text(_address!['country']!),
+                    Text('${_address!['city']}, ${_address!['postal_code']}', 
+                         style: theme.textTheme.bodyMedium),
+                  if (_address?['country'] != null) 
+                    Text(_address!['country']!, style: theme.textTheme.bodyMedium),
                   const SizedBox(height: 8),
                   if (_address?['phone_number'] != null)
-                    Text('Phone: ${_address!['phone_number']}'),
+                    Text('Phone: ${_address!['phone_number']}', 
+                         style: theme.textTheme.bodyMedium),
                 ],
               ),
           ],

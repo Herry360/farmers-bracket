@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_remote_config/firebase_remote_config.dart';
 
-// Theme state with more customization options
+// Theme state with customization options
 class ThemeState {
   final ThemeMode mode;
   final bool isDarkMode;
@@ -40,11 +39,10 @@ class ThemeState {
   }
 }
 
-// Theme notifier with Firebase integration
+// Theme notifier with local storage
 class ThemeNotifier extends StateNotifier<ThemeState> {
   final Ref ref;
   final SharedPreferences prefs;
-  final FirebaseRemoteConfig remoteConfig;
   
   static const String _themeModeKey = 'theme_mode';
   static const String _primaryColorKey = 'primary_color';
@@ -52,11 +50,7 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
   static const String _dynamicColorsKey = 'dynamic_colors';
   static const String _amoledDarkKey = 'amoled_dark';
 
-  ThemeNotifier(
-    this.ref, {
-    required this.prefs,
-    required this.remoteConfig,
-  }) : super(
+  ThemeNotifier(this.ref, {required this.prefs}) : super(
           const ThemeState(
             mode: ThemeMode.system,
             isDarkMode: false,
@@ -67,19 +61,12 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
 
   Future<void> _initializeTheme() async {
     try {
-      await remoteConfig.fetchAndActivate();
-      
-      // Load from preferences with remote config fallbacks
-      final modeIndex = prefs.getInt(_themeModeKey) ?? 
-          remoteConfig.getInt('default_theme_mode');
-      final primaryColorValue = prefs.getInt(_primaryColorKey) ?? 
-          remoteConfig.getInt('default_primary_color');
-      final secondaryColorValue = prefs.getInt(_secondaryColorKey) ?? 
-          remoteConfig.getInt('default_secondary_color');
-      final dynamicColors = prefs.getBool(_dynamicColorsKey) ?? 
-          remoteConfig.getBool('default_dynamic_colors');
-      final amoledDark = prefs.getBool(_amoledDarkKey) ?? 
-          remoteConfig.getBool('default_amoled_dark');
+      // Load from preferences
+      final modeIndex = prefs.getInt(_themeModeKey) ?? ThemeMode.system.index;
+      final primaryColorValue = prefs.getInt(_primaryColorKey) ?? Colors.blue.value;
+      final secondaryColorValue = prefs.getInt(_secondaryColorKey) ?? Colors.teal.value;
+      final dynamicColors = prefs.getBool(_dynamicColorsKey) ?? false;
+      final amoledDark = prefs.getBool(_amoledDarkKey) ?? false;
 
       state = ThemeState(
         mode: ThemeMode.values[modeIndex.clamp(0, ThemeMode.values.length - 1)],
@@ -189,8 +176,6 @@ class ThemeNotifier extends StateNotifier<ThemeState> {
     useMaterial3: true,
     colorScheme: const ColorScheme.dark(),
   );
-
-  void setTheme(ThemeMode themeMode) {}
 }
 
 // Provider
@@ -198,7 +183,6 @@ final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
   return ThemeNotifier(
     ref,
     prefs: ref.watch(sharedPreferencesProvider),
-    remoteConfig: ref.watch(remoteConfigProvider),
   );
 });
 
@@ -207,21 +191,9 @@ final themeDataProvider = Provider<ThemeData>((ref) {
   return ref.watch(themeProvider.notifier).themeData;
 });
 
-// Supporting providers
+// Supporting provider
 final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
   throw UnimplementedError('sharedPreferencesProvider must be overridden in ProviderScope');
-});
-
-final remoteConfigProvider = Provider<FirebaseRemoteConfig>((ref) {
-  final remoteConfig = FirebaseRemoteConfig.instance;
-  remoteConfig.setDefaults({
-    'default_theme_mode': ThemeMode.system.index,
-    'default_primary_color': Colors.blue.value,
-    'default_secondary_color': Colors.teal.value,
-    'default_dynamic_colors': false,
-    'default_amoled_dark': false,
-  });
-  return remoteConfig;
 });
 
 // Extension for easy access to custom colors
