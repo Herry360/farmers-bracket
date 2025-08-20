@@ -1,89 +1,31 @@
-import 'package:auto_route/auto_route.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // ScrollDirection is defined here
+// ...existing code...
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shimmer/shimmer.dart';
 import 'package:badges/badges.dart' as badges;
-import '../models/farm.dart' as farm_model;
-import 'farm_products_screen.dart';
-import 'cart_screen.dart';
-import 'map_screen.dart';
+import 'package:shimmer/shimmer.dart';
+import '../models/farm.dart';
+import '../providers/cart_provider.dart';
 import '../providers/farms_provider.dart';
-import '../providers/cart_count_provider.dart';
+import '../providers/home_screen_filter_provider.dart';
 import '../widgets/farm_card.dart';
-// HomeScreenFilterProvider, HomeScreenFilterState, HomeScreenFilterNotifier, SortOption are missing, define them below if not imported
-// ScrollDirection is missing, import from widgets
-import 'package:flutter/widgets.dart';
+import 'cart_screen.dart';
+import 'farm_products_screen.dart';
+import 'map_screen.dart';
 
-// Temporary definitions if not imported (replace with actual imports if available)
-enum SortOption { distance, rating, name }
-
-class HomeScreenFilterState {
-  final String category;
-  final String searchQuery;
-  final String location;
-  final String rating;
-  final double maxDistance;
-  final bool showFavoritesOnly;
-  final SortOption sortOption;
-  HomeScreenFilterState({
-    this.category = 'All',
-    this.searchQuery = '',
-    this.location = 'All',
-    this.rating = 'All',
-    this.maxDistance = 50.0,
-    this.showFavoritesOnly = false,
-    this.sortOption = SortOption.distance,
-  });
-}
-
-class HomeScreenFilterNotifier extends ChangeNotifier {
-  HomeScreenFilterState _state = HomeScreenFilterState();
-  HomeScreenFilterState get state => _state;
-  void setSearchQuery(String query) {
-    _state = HomeScreenFilterState(searchQuery: query);
-    notifyListeners();
-  }
-  void setLocation(String location) {
-    _state = HomeScreenFilterState(location: location);
-    notifyListeners();
-  }
-  void setRating(String rating) {
-    _state = HomeScreenFilterState(rating: rating);
-    notifyListeners();
-  }
-  void setMaxDistance(double distance) {
-    _state = HomeScreenFilterState(maxDistance: distance);
-    notifyListeners();
-  }
-  void toggleFavorites() {
-    _state = HomeScreenFilterState(showFavoritesOnly: !_state.showFavoritesOnly);
-    notifyListeners();
-  }
-  void resetFilters() {
-    _state = HomeScreenFilterState();
-    notifyListeners();
-  }
-}
-
-final homeScreenFilterProvider = ChangeNotifierProvider<HomeScreenFilterNotifier>((ref) => HomeScreenFilterNotifier());
-
-@RoutePage()
 class HomeScreen extends ConsumerStatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  late final ScrollController _scrollController;
+  final ScrollController _scrollController = ScrollController();
   bool _showFab = true;
 
   @override
   void initState() {
     super.initState();
-    _scrollController = ScrollController()..addListener(_scrollListener);
-    _loadInitialData();
   }
 
   @override
@@ -92,31 +34,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
-    final farmsNotifier = ref.read(farmsProvider.notifier);
-    final farmsState = ref.read(farmsProvider);
-    farmsState.when(
-      data: (farms) async {
-        if (farms.isEmpty) {
-          await farmsNotifier.loadFarms();
-        }
-      },
-      loading: () {},
-      error: (_, __) {},
-    );
-  }
-
-  void _scrollListener() {
-    if (_scrollController.position.userScrollDirection == AxisDirection.down) {
-      if (!_showFab && mounted) setState(() => _showFab = true);
-    } else if (_scrollController.position.userScrollDirection == AxisDirection.up) {
-      if (_showFab && mounted) setState(() => _showFab = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: const Key('home-screen'),
       appBar: AppBar(
         title: const Text('FarmersBracket', style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: false,
@@ -133,7 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildCartButton() {
     return Consumer(
       builder: (context, ref, _) {
-  final cartCount = ref.watch(cartCountProvider);
+        final cartCount = ref.watch(cartCountProvider);
         return IconButton(
           icon: badges.Badge(
             badgeStyle: badges.BadgeStyle(
@@ -147,7 +68,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             showBadge: cartCount > 0,
             child: const Icon(Icons.shopping_cart_outlined),
           ),
-          onPressed: () => Navigator.push(context, 
+          onPressed: () => Navigator.push(context,
               MaterialPageRoute(builder: (_) => const CartScreen())),
         );
       },
@@ -157,8 +78,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget _buildFavoritesFilterButton() {
     return Consumer(
       builder: (context, ref, _) {
-  final filterNotifier = ref.watch(homeScreenFilterProvider);
-  final showFavorites = filterNotifier.state.showFavoritesOnly;
+            final filterNotifier = ref.watch(homeScreenFilterProvider);
+            final filterState = filterNotifier;
+  final showFavorites = filterState.showFavoritesOnly;
         return IconButton(
           icon: Icon(
             showFavorites ? Icons.favorite : Icons.favorite_border,
@@ -174,7 +96,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is UserScrollNotification) {
-          _scrollListener();
+          if (notification.direction == AxisDirection.down) {
+            if (_showFab) setState(() => _showFab = false);
+          } else if (notification.direction == AxisDirection.up) {
+            if (!_showFab) setState(() => _showFab = true);
+          }
         }
         return false;
       },
@@ -182,12 +108,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         builder: (context, ref, _) {
           final farmsState = ref.watch(farmsProvider);
           final filterNotifier = ref.watch(homeScreenFilterProvider);
-          final filterState = filterNotifier.state;
-          
+          final filterState = filterNotifier;
+
           return farmsState.when(
             loading: () => _buildShimmerLoader(),
             error: (err, _) => _buildErrorWidget(err.toString()),
-            data: (farms) => _buildFarmList(farms, filterState),
+            data: (farms) => _buildFarmList(farms.cast<Farm>(), filterState),
           );
         },
       ),
@@ -224,7 +150,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           Icon(Icons.error_outline, size: 48, color: Colors.red[400]),
           const SizedBox(height: 16),
-          Text('Failed to load farms', 
+          Text('Failed to load farms',
               style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           TextButton(
@@ -239,8 +165,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  Widget _buildFarmList(List<farm_model.Farm> farms, HomeScreenFilterState filterState) {
+  Widget _buildFarmList(List<Farm> farms, HomeScreenFilterState filterState) {
     final filteredFarms = _filterAndSortFarms(farms, filterState);
+
+    if (filteredFarms.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text('No farms found', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text('Try adjusting your filters', style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      );
+    }
 
     return RefreshIndicator(
       onRefresh: () => ref.read(farmsProvider.notifier).refresh(),
@@ -271,15 +212,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   mainAxisSpacing: 16,
                 ),
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) => FarmCard(
-                    farm: filteredFarms[index],
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => FarmProductsScreen(farm: filteredFarms[index]),
-                      ),
-                    ),
-                  ),
+                  (context, index) {
+                    final farm = filteredFarms[index];
+                    return FarmCard(
+                      farm: farm,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FarmProductsScreen(farm: farm),
+                          ),
+                        );
+                      },
+                      onFavoriteToggle: () {
+                        ref.read(farmsProvider.notifier).toggleFavorite(farm.id, !farm.isFavorite);
+                      },
+                    );
+                  },
                   childCount: filteredFarms.length,
                 ),
               ),
@@ -294,7 +243,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                Theme.of(context).colorScheme.primary.withAlpha((0.05 * 255).toInt()),
             Colors.transparent,
           ],
           begin: Alignment.topCenter,
@@ -315,19 +264,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Widget _buildSearchField() {
-    return TextField(
-      decoration: InputDecoration(
-        hintText: 'Search farms...',
-        prefixIcon: const Icon(Icons.search),
-        filled: true,
-        fillColor: Colors.white,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-        contentPadding: const EdgeInsets.symmetric(vertical: 12),
-      ),
-      onChanged: (value) => ref.read(homeScreenFilterProvider.notifier).setSearchQuery(value),
+    return Consumer(
+      builder: (context, ref, _) {
+        return TextField(
+          decoration: InputDecoration(
+            hintText: 'Search farms...',
+            prefixIcon: const Icon(Icons.search),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide.none,
+            ),
+            contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+          onChanged: (value) => ref.read(homeScreenFilterProvider.notifier).setSearchQuery(value),
+        );
+      },
     );
   }
 
@@ -335,7 +288,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Consumer(
       builder: (context, ref, _) {
         final filterNotifier = ref.watch(homeScreenFilterProvider);
-        final filterState = filterNotifier.state;
+  final filterState = filterNotifier;
         final notifier = ref.read(homeScreenFilterProvider.notifier);
         return SingleChildScrollView(
           scrollDirection: Axis.horizontal,
@@ -364,13 +317,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onSelected: (_) => _showDistanceDialog(context, ref, notifier, state),
       selected: state.maxDistance != 50.0,
       backgroundColor: Colors.white,
-      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          selectedColor: Theme.of(context).colorScheme.primary.withAlpha((0.1 * 255).toInt()),
       shape: StadiumBorder(
         side: BorderSide(color: Colors.grey.shade300),
       ),
       labelStyle: TextStyle(
-        color: state.maxDistance != 50.0 
-            ? Theme.of(context).colorScheme.primary 
+        color: state.maxDistance != 50.0
+            ? Theme.of(context).colorScheme.primary
             : Colors.grey[800],
       ),
     );
@@ -383,7 +336,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onSelected: (_) => _showLocationDialog(context, ref, notifier, state),
       selected: state.location != 'All',
       backgroundColor: Colors.white,
-      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          selectedColor: Theme.of(context).colorScheme.primary.withAlpha((0.1 * 255).toInt()),
       shape: StadiumBorder(
         side: BorderSide(color: Colors.grey.shade300),
       ),
@@ -402,7 +355,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onSelected: (_) => _showRatingDialog(context, ref, notifier, state),
       selected: state.rating != 'All',
       backgroundColor: Colors.white,
-      selectedColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+          selectedColor: Theme.of(context).colorScheme.primary.withAlpha((0.1 * 255).toInt()),
       shape: StadiumBorder(
         side: BorderSide(color: Colors.grey.shade300),
       ),
@@ -421,7 +374,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       onSelected: (_) => notifier.toggleFavorites(),
       selected: true,
       backgroundColor: Colors.white,
-      selectedColor: Colors.redAccent.withOpacity(0.1),
+          selectedColor: Colors.redAccent.withAlpha((0.1 * 255).toInt()),
       shape: StadiumBorder(
         side: BorderSide(color: Colors.grey.shade300),
       ),
@@ -442,7 +395,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 8),
           TextButton(
-            onPressed: ref.read(homeScreenFilterProvider.notifier).resetFilters,
+            onPressed: () => ref.read(homeScreenFilterProvider.notifier).resetFilters(),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.primary,
             ),
@@ -477,7 +430,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 final filterNotifier = ref.read(homeScreenFilterProvider);
                 farmsState.when(
                   data: (farms) {
-                    final filteredFarms = _filterAndSortFarms(farms, filterNotifier.state);
+                    final filteredFarms = _filterAndSortFarms(farms.cast<Farm>(), filterNotifier);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -498,7 +451,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     );
   }
 
-  List<farm_model.Farm> _filterAndSortFarms(List<farm_model.Farm> farms, HomeScreenFilterState state) {
+  List<Farm> _filterAndSortFarms(List<Farm> farms, HomeScreenFilterState state) {
     final filtered = farms.where((farm) {
       final matchesCategory = state.category == 'All' || farm.category == state.category;
       final matchesSearch = state.searchQuery.isEmpty ||
@@ -539,7 +492,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         return Consumer(
           builder: (context, ref, _) {
             final filterNotifier = ref.watch(homeScreenFilterProvider);
-            final filterState = filterNotifier.state;
+            final filterState = filterNotifier;
             final notifier = ref.read(homeScreenFilterProvider.notifier);
             return Container(
               decoration: BoxDecoration(
@@ -607,7 +560,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildLocationFilterSection(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
     final locations = ['All', 'California, USA', 'Texas, USA', 'Colorado, USA'];
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
@@ -642,7 +595,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Widget _buildRatingFilterSection(HomeScreenFilterState state, HomeScreenFilterNotifier notifier) {
     final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
@@ -763,139 +716,146 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _showDistanceDialog(
-    BuildContext context, 
-    WidgetRef ref, 
-    HomeScreenFilterNotifier notifier, 
-    HomeScreenFilterState state
+    BuildContext context,
+    WidgetRef ref,
+    HomeScreenFilterNotifier notifier,
+    HomeScreenFilterState state,
   ) async {
     double tempDistance = state.maxDistance;
-    
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Max Distance'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Slider(
-              value: tempDistance,
-              min: 5,
-              max: 100,
-              divisions: 19,
-              label: '${tempDistance.round()} km',
-              onChanged: (value) => setState(() => tempDistance = value),
-              activeColor: Theme.of(context).colorScheme.primary,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Select Max Distance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Slider(
+                value: tempDistance,
+                min: 5,
+                max: 100,
+                divisions: 19,
+                label: '${tempDistance.round()} km',
+                onChanged: (value) => setState(() => tempDistance = value),
+                activeColor: Theme.of(context).colorScheme.primary,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                notifier.setMaxDistance(tempDistance);
+                Navigator.pop(context);
+              },
+              child: const Text('Apply'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              notifier.setMaxDistance(tempDistance);
-              Navigator.pop(context);
-            },
-            child: const Text('Apply'),
-          ),
-        ],
       ),
     );
   }
 
   Future<void> _showLocationDialog(
-    BuildContext context, 
-    WidgetRef ref, 
-    HomeScreenFilterNotifier notifier, 
-    HomeScreenFilterState state
+    BuildContext context,
+    WidgetRef ref,
+    HomeScreenFilterNotifier notifier,
+    HomeScreenFilterState state,
   ) async {
     final locations = ['All', 'California, USA', 'Texas, USA', 'Colorado, USA'];
     String? selectedLocation = state.location;
-    
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Location'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: locations
-                .map((location) => RadioListTile<String>(
-                      title: Text(location),
-                      value: location,
-                      groupValue: selectedLocation,
-                      onChanged: (value) => setState(() => selectedLocation = value),
-                      activeColor: Theme.of(context).colorScheme.primary,
-                    ))
-                .toList(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Select Location'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: locations
+                  .map((location) => RadioListTile<String>(
+                        title: Text(location),
+                        value: location,
+                        groupValue: selectedLocation,
+                        onChanged: (value) => setState(() => selectedLocation = value),
+                        activeColor: Theme.of(context).colorScheme.primary,
+                      ))
+                  .toList(),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (selectedLocation != null) {
+                  notifier.setLocation(selectedLocation!);
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('Apply'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (selectedLocation != null) {
-                notifier.setLocation(selectedLocation!);
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Apply'),
-          ),
-        ],
       ),
     );
   }
 
   Future<void> _showRatingDialog(
-    BuildContext context, 
-    WidgetRef ref, 
-    HomeScreenFilterNotifier notifier, 
-    HomeScreenFilterState state
+    BuildContext context,
+    WidgetRef ref,
+    HomeScreenFilterNotifier notifier,
+    HomeScreenFilterState state,
   ) async {
     final ratings = ['All', '4+ Stars', '3+ Stars', '2+ Stars'];
     String? selectedRating = state.rating;
-    
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Select Minimum Rating'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: ratings
-                .map((rating) => RadioListTile<String>(
-                      title: Text(rating),
-                      value: rating,
-                      groupValue: selectedRating,
-                      onChanged: (value) => setState(() => selectedRating = value),
-                      activeColor: Theme.of(context).colorScheme.primary,
-                    ))
-                .toList(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Select Minimum Rating'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: ListView(
+              shrinkWrap: true,
+              children: ratings
+                  .map((rating) => RadioListTile<String>(
+                        title: Text(rating),
+                        value: rating,
+                        groupValue: selectedRating,
+                        onChanged: (value) => setState(() => selectedRating = value),
+                        activeColor: Theme.of(context).colorScheme.primary,
+                      ))
+                  .toList(),
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                if (selectedRating != null) {
+                  notifier.setRating(selectedRating!);
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('Apply'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (selectedRating != null) {
-                notifier.setRating(selectedRating!);
-              }
-              Navigator.pop(context);
-            },
-            child: const Text('Apply'),
-          ),
-        ],
       ),
     );
   }
+// ...existing code...
 }

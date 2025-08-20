@@ -7,15 +7,11 @@ import '../providers/cart_provider.dart' as cart_provider;
 import '../providers/products_provider.dart' as products_data;
 import '../providers/favorites_provider.dart';
 import '../widgets/product_card.dart';
-import 'cart_screen.dart' hide CartNotifier;
-
+import 'cart_screen.dart';
 class FarmProductsScreen extends ConsumerWidget {
   final Farm farm;
 
-  const FarmProductsScreen({
-    super.key,
-    required this.farm,
-  });
+  const FarmProductsScreen({Key? key, required this.farm}) : super(key: key);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -182,6 +178,7 @@ class _FarmImage extends StatelessWidget {
     );
   }
 }
+
 
 class _FarmDetails extends StatelessWidget {
   final Farm farm;

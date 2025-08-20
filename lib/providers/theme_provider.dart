@@ -2,183 +2,138 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-// Theme state with customization options
+enum AppThemeMode { system, light, dark }
+
 class ThemeState {
-  final ThemeMode mode;
-  final bool isDarkMode;
+  final AppThemeMode mode;
   final Color primaryColor;
   final Color secondaryColor;
-  final bool dynamicColors;
   final bool amoledDark;
+  final bool isHighContrast;
 
   const ThemeState({
-    required this.mode,
-    required this.isDarkMode,
+    this.mode = AppThemeMode.system,
     this.primaryColor = Colors.blue,
-    this.secondaryColor = Colors.teal,
-    this.dynamicColors = false,
+    this.secondaryColor = Colors.amber,
     this.amoledDark = false,
+    this.isHighContrast = false,
   });
 
   ThemeState copyWith({
-    ThemeMode? mode,
-    bool? isDarkMode,
+    AppThemeMode? mode,
     Color? primaryColor,
     Color? secondaryColor,
-    bool? dynamicColors,
     bool? amoledDark,
+    bool? isHighContrast,
   }) {
     return ThemeState(
       mode: mode ?? this.mode,
-      isDarkMode: isDarkMode ?? this.isDarkMode,
       primaryColor: primaryColor ?? this.primaryColor,
       secondaryColor: secondaryColor ?? this.secondaryColor,
-      dynamicColors: dynamicColors ?? this.dynamicColors,
       amoledDark: amoledDark ?? this.amoledDark,
+      isHighContrast: isHighContrast ?? this.isHighContrast,
     );
   }
 }
 
-// Theme notifier with local storage
+// Keys for SharedPreferences
+const String kThemeModeKey = 'themeMode';
+const String kPrimaryColorKey = 'primaryColor';
+const String kSecondaryColorKey = 'secondaryColor';
+const String kAmoledDarkKey = 'amoledDark';
+const String kHighContrastKey = 'highContrast';
+
 class ThemeNotifier extends StateNotifier<ThemeState> {
   final Ref ref;
   final SharedPreferences prefs;
-  
-  static const String _themeModeKey = 'theme_mode';
-  static const String _primaryColorKey = 'primary_color';
-  static const String _secondaryColorKey = 'secondary_color';
-  static const String _dynamicColorsKey = 'dynamic_colors';
-  static const String _amoledDarkKey = 'amoled_dark';
 
-  ThemeNotifier(this.ref, {required this.prefs}) : super(
-          const ThemeState(
-            mode: ThemeMode.system,
-            isDarkMode: false,
-          ),
-        ) {
-    _initializeTheme();
-  }
+  ThemeNotifier(this.ref, {required this.prefs}) : super(const ThemeState());
 
-  Future<void> _initializeTheme() async {
+  Future<void> loadPreferences() async {
     try {
-      // Load from preferences
-      final modeIndex = prefs.getInt(_themeModeKey) ?? ThemeMode.system.index;
-      final primaryColorValue = prefs.getInt(_primaryColorKey) ?? Colors.blue.value;
-      final secondaryColorValue = prefs.getInt(_secondaryColorKey) ?? Colors.teal.value;
-      final dynamicColors = prefs.getBool(_dynamicColorsKey) ?? false;
-      final amoledDark = prefs.getBool(_amoledDarkKey) ?? false;
+      final modeIndex = prefs.getInt(kThemeModeKey) ?? state.mode.index;
+      final primaryColor = prefs.getInt(kPrimaryColorKey) ?? state.primaryColor.value;
+      final secondaryColor = prefs.getInt(kSecondaryColorKey) ?? state.secondaryColor.value;
+      final amoledDark = prefs.getBool(kAmoledDarkKey) ?? state.amoledDark;
+      final highContrast = prefs.getBool(kHighContrastKey) ?? state.isHighContrast;
 
-      state = ThemeState(
-        mode: ThemeMode.values[modeIndex.clamp(0, ThemeMode.values.length - 1)],
-        isDarkMode: _calculateIsDarkMode(
-          ThemeMode.values[modeIndex.clamp(0, ThemeMode.values.length - 1)],
-        ),
-        primaryColor: Color(primaryColorValue),
-        secondaryColor: Color(secondaryColorValue),
-        dynamicColors: dynamicColors,
+      state = state.copyWith(
+        mode: AppThemeMode.values[modeIndex.clamp(0, AppThemeMode.values.length - 1)],
+        primaryColor: Color(primaryColor),
+        secondaryColor: Color(secondaryColor),
         amoledDark: amoledDark,
+        isHighContrast: highContrast,
       );
     } catch (e) {
-      state = const ThemeState(
-        mode: ThemeMode.system,
-        isDarkMode: false,
-      );
+      debugPrint('Error loading theme preferences: $e');
     }
   }
 
-  bool _calculateIsDarkMode(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        return false;
-      case ThemeMode.dark:
-        return true;
-      case ThemeMode.system:
-        return WidgetsBinding.instance.window.platformBrightness == Brightness.dark;
-    }
+  Future<void> _savePreferences() async {
+    await Future.wait([
+      prefs.setInt(kThemeModeKey, state.mode.index),
+      prefs.setInt(kPrimaryColorKey, state.primaryColor.value),
+      prefs.setInt(kSecondaryColorKey, state.secondaryColor.value),
+      prefs.setBool(kAmoledDarkKey, state.amoledDark),
+      prefs.setBool(kHighContrastKey, state.isHighContrast),
+    ]);
   }
 
-  Future<void> _saveToPrefs() async {
-    await prefs.setInt(_themeModeKey, state.mode.index);
-    await prefs.setInt(_primaryColorKey, state.primaryColor.value);
-    await prefs.setInt(_secondaryColorKey, state.secondaryColor.value);
-    await prefs.setBool(_dynamicColorsKey, state.dynamicColors);
-    await prefs.setBool(_amoledDarkKey, state.amoledDark);
+  Future<void> updateThemeMode(AppThemeMode mode) async {
+    state = state.copyWith(mode: mode);
+    await _savePreferences();
   }
 
-  Future<void> setThemeMode(ThemeMode mode) async {
-    state = state.copyWith(
-      mode: mode,
-      isDarkMode: _calculateIsDarkMode(mode),
-    );
-    await _saveToPrefs();
-  }
-
-  Future<void> toggleDarkMode() async {
-    final newMode = state.isDarkMode ? ThemeMode.light : ThemeMode.dark;
-    await setThemeMode(newMode);
-  }
-
-  Future<void> setPrimaryColor(Color color) async {
+  Future<void> updatePrimaryColor(Color color) async {
     state = state.copyWith(primaryColor: color);
-    await _saveToPrefs();
+    await _savePreferences();
   }
 
-  Future<void> setSecondaryColor(Color color) async {
+  Future<void> updateSecondaryColor(Color color) async {
     state = state.copyWith(secondaryColor: color);
-    await _saveToPrefs();
-  }
-
-  Future<void> toggleDynamicColors(bool value) async {
-    state = state.copyWith(dynamicColors: value);
-    await _saveToPrefs();
+    await _savePreferences();
   }
 
   Future<void> toggleAmoledDark(bool value) async {
     state = state.copyWith(amoledDark: value);
-    await _saveToPrefs();
+    await _savePreferences();
   }
 
-  // Get the current theme data based on state
+  Future<void> toggleHighContrast(bool value) async {
+    state = state.copyWith(isHighContrast: value);
+    await _savePreferences();
+  }
+
+  Future<void> resetToDefaults() async {
+    state = const ThemeState();
+    await _savePreferences();
+  }
+
   ThemeData get themeData {
-    final brightness = state.isDarkMode ? Brightness.dark : Brightness.light;
-    final baseTheme = state.isDarkMode ? _darkTheme : _lightTheme;
-
-    Color surfaceColor = baseTheme.colorScheme.surface;
-    if (state.isDarkMode && state.amoledDark) {
-      surfaceColor = Colors.black;
+    if (state.mode == AppThemeMode.dark) {
+      return ThemeData.dark().copyWith(
+        primaryColor: state.primaryColor,
+        colorScheme: ColorScheme.dark(
+          primary: state.primaryColor,
+          secondary: state.secondaryColor,
+        ),
+      );
+    } else {
+      return ThemeData.light().copyWith(
+        primaryColor: state.primaryColor,
+        colorScheme: ColorScheme.light(
+          primary: state.primaryColor,
+          secondary: state.secondaryColor,
+        ),
+      );
     }
-
-    return baseTheme.copyWith(
-      colorScheme: ColorScheme(
-        brightness: brightness,
-        primary: state.primaryColor,
-        onPrimary: Colors.white,
-        primaryContainer: state.primaryColor.withOpacity(0.2),
-        secondary: state.secondaryColor,
-        onSecondary: Colors.white,
-        secondaryContainer: state.secondaryColor.withOpacity(0.2),
-        surface: surfaceColor,
-        onSurface: brightness == Brightness.dark ? Colors.white : Colors.black,
-        error: Colors.red.shade400,
-        onError: Colors.white,
-      ),
-    );
   }
-
-  // Base light theme
-  static final _lightTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: const ColorScheme.light(),
-  );
-
-  // Base dark theme
-  static final _darkTheme = ThemeData(
-    useMaterial3: true,
-    colorScheme: const ColorScheme.dark(),
-  );
 }
 
-// Provider
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError('sharedPreferencesProvider must be overridden in ProviderScope');
+});
+
 final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
   return ThemeNotifier(
     ref,
@@ -186,17 +141,10 @@ final themeProvider = StateNotifierProvider<ThemeNotifier, ThemeState>((ref) {
   );
 });
 
-// Theme data provider that rebuilds when theme changes
 final themeDataProvider = Provider<ThemeData>((ref) {
   return ref.watch(themeProvider.notifier).themeData;
 });
 
-// Supporting provider
-final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
-  throw UnimplementedError('sharedPreferencesProvider must be overridden in ProviderScope');
-});
-
-// Extension for easy access to custom colors
 extension CustomThemeData on ThemeData {
   Color get surfaceVariant => colorScheme.surfaceContainerHighest;
   Color get onSurfaceVariant => colorScheme.onSurface.withOpacity(0.6);

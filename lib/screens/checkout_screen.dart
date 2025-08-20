@@ -14,20 +14,24 @@ final orderProvider = StateNotifierProvider<OrderNotifier, OrderState>((ref) {
 
 class OrderNotifier extends StateNotifier<OrderState> {
   final Ref ref;
-  
+
   OrderNotifier(this.ref) : super(OrderState());
+
+  void resetOrderState() {
+    state = OrderState();
+  }
 
   Future<void> placeOrder(List<CartItem> cartItems, String paymentMethod) async {
     try {
       state = state.copyWith(isProcessing: true, error: null);
-      
-      // Calculate order totals
-      final subtotal = cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
+
+      final subtotal = cartItems.isNotEmpty
+          ? cartItems.fold<double>(0.0, (sum, item) => sum + (item.subtotal ?? 0.0))
+          : 0.0;
       final shippingFee = 5.0;
       final tax = subtotal * 0.1;
       final total = subtotal + shippingFee + tax;
 
-      // Create order object
       final order = Order(
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         items: cartItems,
@@ -40,13 +44,7 @@ class OrderNotifier extends StateNotifier<OrderState> {
         status: 'processing',
       );
 
-      // In a real app, you would send this to your backend here
-      // await apiService.placeOrder(order);
-      
-      // Simulate network delay
       await Future.delayed(const Duration(seconds: 2));
-
-      // Clear cart
       ref.read(cartProvider.notifier).clearCart();
 
       state = state.copyWith(
@@ -123,9 +121,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   int _selectedPaymentMethod = 0;
   final List<String> _paymentMethods = [
     'Credit Card',
-    'PayPal',
-    'Bank Transfer',
-    'Cash on Delivery'
+    'Mobile Payment',
+    'Cash on Delivery',
   ];
 
   @override
@@ -134,18 +131,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final orderState = ref.watch(orderProvider);
     final orderNotifier = ref.read(orderProvider.notifier);
     final theme = Theme.of(context);
-    
-    final subtotal = cartItems.fold(0.0, (sum, item) => sum + item.subtotal);
+    final subtotal = cartItems.fold<double>(0.0, (sum, item) => sum + (item.subtotal ?? 0.0));
     final shippingFee = 5.0;
     final tax = subtotal * 0.1;
     final total = subtotal + shippingFee + tax;
 
-    // Show order success dialog if needed
     if (orderState.lastOrder != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _showOrderSuccessDialog(context, orderState.lastOrder!);
-        // Reset order state after showing dialog
-        ref.read(orderProvider.notifier).state = OrderState();
+        ref.read(orderProvider.notifier).resetOrderState();
       });
     }
 
@@ -198,11 +192,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     _buildSummaryRow('Shipping', shippingFee),
                     _buildSummaryRow('Tax (10%)', tax),
                     const Divider(height: 24),
-                    _buildSummaryRow(
-                      'Total',
-                      total,
-                      isTotal: true,
-                    ),
+                    _buildSummaryRow('Total', total, isTotal: true),
                   ],
                 ),
               ),
@@ -211,12 +201,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
       ),
       bottomNavigationBar: _buildCheckoutButton(
-        cartItems, 
-        total, 
-        theme, 
+        cartItems,
+        total,
+        theme,
         orderState,
         () => orderNotifier.placeOrder(
-          cartItems, 
+          cartItems,
           _paymentMethods[_selectedPaymentMethod],
         ),
       ),
@@ -227,7 +217,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Text(
       title,
       style: const TextStyle(
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: FontWeight.bold,
       ),
     );
@@ -235,19 +225,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Widget _buildSummaryRow(String label, double value, {bool isTotal = false}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          Text(label, style: const TextStyle(fontSize: 14)),
           Text(
-            label,
-            style: TextStyle(
-              fontSize: isTotal ? 16 : 14,
-              fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          Text(
-            '\$${value.toStringAsFixed(2)}',
+            'R${value.toStringAsFixed(2)}',
             style: TextStyle(
               fontSize: isTotal ? 16 : 14,
               fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
@@ -259,8 +243,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildCheckoutButton(
-    List<CartItem> cartItems, 
-    double total, 
+    List<CartItem> cartItems,
+    double total,
     ThemeData theme,
     OrderState orderState,
     VoidCallback onPlaceOrder,
@@ -286,8 +270,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           backgroundColor: theme.primaryColor,
           foregroundColor: theme.colorScheme.onPrimary,
         ),
-        onPressed: orderState.isProcessing || cartItems.isEmpty 
-            ? null 
+        onPressed: orderState.isProcessing || cartItems.isEmpty
+            ? null
             : onPlaceOrder,
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -308,7 +292,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             if (!orderState.isProcessing) ...[
               const SizedBox(width: 8),
               Text(
-                '\$${total.toStringAsFixed(2)}',
+                'R${total.toStringAsFixed(2)}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ],
@@ -332,7 +316,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             const SizedBox(height: 16),
             Text('Order ID: ${order.id}'),
             Text('Date: ${DateFormat('MMM dd, yyyy - hh:mm a').format(order.date)}'),
-            Text('Total: \$${order.total.toStringAsFixed(2)}'),
+            Text('Total: R${order.total.toStringAsFixed(2)}'),
           ],
         ),
         actions: [

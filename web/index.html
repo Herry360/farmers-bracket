@@ -1,94 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <base href="$FLUTTER_BASE_HREF">
-
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <meta name="description" content="Farmers Bracket E-commerce App">
-
-  <!-- Mobile web app capable (replaces deprecated apple-mobile-web-app-capable) -->
   <meta name="mobile-web-app-capable" content="yes">
-  
   <!-- iOS meta tags & icons -->
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Farmers Bracket">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-
-  <!-- Favicon -->
+  
+  <link rel="apple-touch-icon" sizes="180x180" href="icons/Icon-192.png">
   <link rel="icon" type="image/png" href="favicon.png">
-
   <!-- Web App Manifest -->
   <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
 
   <title>Farmers Bracket</title>
 
-  <!-- Flutter initialization -->
-  <script>
-  // Service worker version from build
-  const serviceWorkerVersion = "{{flutter_service_worker_version}}";
+  <!-- Updated Flutter loader initialization -->
+  <script src="flutter.js" defer></script>
+</head>
+<body>
+  <div id="app-loading">
+    <div class="loading-content">
+      <div class="loading-spinner"></div>
+      <p>Loading application...</p>
+    </div>
+  </div>
 
-    window.addEventListener('load', function(ev) {
-      // Download main.dart.js
-      window.addEventListener('online', function() {
-        if (window.flutterWebRenderer === 'html') {
-          _flutter.loader.load({
-            serviceWorker: {
-              serviceWorkerVersion: serviceWorkerVersion,
-            }
+  <script>
+    (function() {
+      function initializeFlutter() {
+        if (typeof _flutter !== 'undefined') {
+          _flutter.load({
+            serviceWorker: {}
           }).then(function(engineInitializer) {
             return engineInitializer.initializeEngine();
           }).then(function(appRunner) {
             return appRunner.runApp();
+          }).then(function() {
+            hideSplash();
+          }).catch(function(error) {
+            showError('Application failed to start. Please refresh.');
+            console.error('Flutter error:', error);
           });
+        } else {
+          showError('Flutter engine not loaded. Try clearing cache.');
         }
+      }
+
+      function hideSplash() {
+        const splash = document.getElementById('app-loading');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(() => splash.remove(), 500);
+        }
+      }
+
+      function showError(message) {
+        const splash = document.getElementById('app-loading');
+        if (splash) {
+          splash.querySelector('.loading-content').innerHTML = `
+            <div class="error-message">
+              <h2>Error</h2>
+              <p>${message}</p>
+            </div>
+            <button class="reload-button" onclick="window.location.reload()">
+              Reload Application
+            </button>
+          `;
+        }
+      }
+
+      window.addEventListener('load', function() {
+        initializeFlutter();
+        // Remove manual service worker registration - Flutter.js handles this now
       });
-    });
-  </script>
-  
-  <!-- Preload important resources -->
-  <!-- Removed preload for main.dart.js to fix Edge warning -->
-</head>
-<body>
-  <!-- Flutter rendering -->
-  <script src="flutter.js" defer></script>
-  
-  <!-- Loading indicator with better accessibility -->
-  <div id="loading" aria-live="polite" aria-busy="true">
-    <div class="loading-content">
-      <p>Loading Farmers Bracket...</p>
-      <div class="loading-spinner" role="status">
-        <span class="visually-hidden">Loading application</span>
-      </div>
-    </div>
-  </div>
-  
-  <script>
-    // Hide loading indicator when Flutter is ready
-    document.addEventListener('flutter-first-frame', function() {
-      const loadingElement = document.getElementById('loading');
-      if (loadingElement) {
-        loadingElement.style.opacity = '0';
-        setTimeout(() => {
-          loadingElement.style.display = 'none';
-        }, 300); // Match this with CSS transition
-      }
-    });
-    
-    // Fallback in case Flutter fails to load
-    setTimeout(function() {
-      const loadingElement = document.getElementById('loading');
-      if (loadingElement && loadingElement.style.display !== 'none') {
-        loadingElement.innerHTML = 
-          '<div class="error-content"><p>Failed to load application. Please check your connection.</p></div>';
-      }
-    }, 15000); // 15 second timeout
+      window.addEventListener('error', function(event) {
+        showError('Application error: ' + (event.message || 'Unknown error'));
+      });
+    })();
   </script>
   
   <style>
     /* Basic loading styles - customize as needed */
-    #loading {
+    #app-loading {
       position: fixed;
       top: 0;
       left: 0;
@@ -101,26 +97,22 @@
       z-index: 9999;
       transition: opacity 0.3s ease;
     }
-    
     .loading-content {
       text-align: center;
     }
-    
     .loading-spinner {
       border: 4px solid rgba(0, 0, 0, 0.1);
       border-radius: 50%;
-      border-top: 4px solid #2e7d32; /* Green color - change to match your theme */
+      border-top: 4px solid #2e7d32;
       width: 40px;
       height: 40px;
       animation: spin 1s linear infinite;
       margin: 20px auto;
     }
-    
     @keyframes spin {
       0% { transform: rotate(0deg); }
       100% { transform: rotate(360deg); }
     }
-    
     .visually-hidden {
       position: absolute;
       width: 1px;
@@ -132,9 +124,8 @@
       white-space: nowrap;
       border: 0;
     }
-    
     .error-content {
-      color: #d32f2f; /* Error red color */
+      color: #d32f2f;
       text-align: center;
       padding: 20px;
     }

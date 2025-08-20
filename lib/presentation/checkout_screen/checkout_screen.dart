@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:sizer/sizer.dart';
-// Ensure 'sizer' is a dependency in pubspec.yaml
 
 import '../../core/app_export.dart';
 import './widgets/checkout_progress_indicator.dart';

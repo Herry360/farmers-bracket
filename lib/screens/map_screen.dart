@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import '../models/farm.dart' as farm_model;
+import '../models/farm.dart';
 
 class MapScreen extends StatefulWidget {
-  final List<farm_model.Farm> farms;
+  final List<Farm> farms;
 
-  const MapScreen({super.key, required this.farms});
+  const MapScreen({Key? key, required this.farms}) : super(key: key);
 
   @override
   State<MapScreen> createState() => _MapScreenState();
@@ -79,22 +79,19 @@ class _MapScreenState extends State<MapScreen> {
 
   Set<Marker> _buildMarkers() {
     return widget.farms.where((farm) => farm.geoPoint != null).map((farm) {
-      return Marker(
-        markerId: MarkerId(farm.id),
-        position: LatLng(farm.geoPoint!.latitude, farm.geoPoint!.longitude),
-        infoWindow: InfoWindow(
-          title: farm.name,
-          snippet: farm.location,
-          onTap: () {
-            // You could add navigation to farm details here
-          },
-        ),
-        icon: BitmapDescriptor.defaultMarkerWithHue(
-          farm.isVerified 
-              ? BitmapDescriptor.hueGreen 
-              : BitmapDescriptor.hueOrange,
-        ),
-      );
+        return Marker(
+          markerId: MarkerId(farm.id),
+          position: LatLng(farm.geoPoint!.latitude, farm.geoPoint!.longitude),
+          infoWindow: InfoWindow(
+            title: farm.name,
+            snippet: farm.isVerified ? 'Verified' : null,
+          ),
+          icon: BitmapDescriptor.defaultMarkerWithHue(
+            farm.isVerified 
+                ? BitmapDescriptor.hueGreen 
+                : BitmapDescriptor.hueOrange,
+          ),
+        );
     }).toSet();
   }
 
@@ -122,7 +119,7 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  LatLngBounds _calculateBounds(List<farm_model.Farm> farms) {
+  LatLngBounds _calculateBounds(List<Farm> farms) {
     double? minLat, maxLat, minLng, maxLng;
 
     for (final farm in farms) {

@@ -2,7 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/product.dart';
-import 'checkout_screen.dart';
+import 'checkout_screen.dart' hide Text, SizedBox;
 
 // Cart state notifier
 class CartNotifier extends StateNotifier<List<Product>> {
@@ -53,7 +53,7 @@ class CartScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cartItems = ref.watch(cartProvider);
-    final totalPrice = cartItems.fold(0.0, (sum, item) => sum + (item.price * item.quantity));
+    final totalPrice = cartItems.fold<double>(0.0, (sum, item) => sum + (item.price * item.quantity));
     final shippingFee = 5.00;
 
     return Scaffold(

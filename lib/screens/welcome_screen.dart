@@ -3,13 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'login_screen.dart';
 
-// Welcome Content Provider
 final welcomeContentProvider = Provider<WelcomeContent>((ref) {
   return WelcomeContent(
-    appName: 'My App',
-    tagline: 'Welcome to our amazing application',
-    buttonText: 'Get Started',
-    imageUrl: null, // You can add a local image asset path here
+    appName: 'FarmersBracket',
+    tagline: 'Welcome to the Farmers Market!',
+    buttonText: 'Continue',
+    imageUrl: null,
     primaryColor: Colors.green,
     secondaryColor: Colors.white,
     showSkipButton: false,
@@ -74,9 +73,9 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
   }
 
   @override
+  @override
   Widget build(BuildContext context) {
     final welcomeContent = ref.watch(welcomeContentProvider);
-
     return Scaffold(
       body: _buildWelcomeContent(context, welcomeContent),
     );

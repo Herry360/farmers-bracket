@@ -9,19 +9,143 @@ class OrderHistoryScreen extends StatefulWidget {
 }
 
 class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
+  // Helper to get color for order status
+
   final List<String> statuses = ['processing', 'shipped', 'delivered', 'cancelled'];
-    // Removed unused fields: _scrollController, _orders, _isLoading, _hasMore
+  List<Order> _orders = [];
+  bool _isLoading = true;
+
+
+  Color getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'processing':
+        return Colors.orange;
+      case 'shipped':
+        return Colors.blue;
+      case 'delivered':
+        return Colors.green;
+      case 'cancelled':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
 
   @override
   void initState() {
     super.initState();
-    // TODO: implement order loading logic
+    _loadOrders();
+  }
+
+  void _loadOrders() async {
+    // Simulate network delay
+    await Future.delayed(const Duration(seconds: 1));
+    // Mock data
+    setState(() {
+      _orders = [
+        Order(
+          id: 'ORD001',
+          date: DateTime.now().subtract(const Duration(days: 2)),
+          items: [
+            OrderItem(
+              productId: 'P001',
+              productName: 'Wireless Headphones',
+              imageUrl: 'assets/images/no-image.jpg',
+              quantity: 1,
+              unitPrice: 59.99,
+              totalPrice: 59.99,
+            ),
+          ],
+          subtotal: 59.99,
+          taxAmount: 4.80,
+          discountAmount: 0.0,
+          totalAmount: 64.79,
+          status: 'delivered',
+          userId: 'U001',
+        ),
+        Order(
+          id: 'ORD002',
+          date: DateTime.now().subtract(const Duration(days: 5)),
+          items: [
+            OrderItem(
+              productId: 'P002',
+              productName: 'Smart Watch',
+              imageUrl: 'assets/images/no-image.jpg',
+              quantity: 1,
+              unitPrice: 120.00,
+              totalPrice: 120.00,
+            ),
+          ],
+          subtotal: 120.00,
+          taxAmount: 9.60,
+          discountAmount: 10.0,
+          totalAmount: 119.60,
+          status: 'processing',
+          userId: 'U001',
+        ),
+      ];
+      _isLoading = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // TODO: implement order history screen UI
-    return Container();
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_orders.isEmpty) {
+      return const Center(child: Text('No orders found.'));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _orders.length,
+      itemBuilder: (context, index) {
+        final order = _orders[index];
+        return Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          elevation: 3,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Order #${order.id}', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: getStatusColor(order.status),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        order.status.toUpperCase(),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('Date: ${order.formattedDate}', style: const TextStyle(fontSize: 14)),
+                const SizedBox(height: 8),
+                Text('Total: \$${order.totalAmount.toStringAsFixed(2)}', style: const TextStyle(fontSize: 14)),
+                const SizedBox(height: 12),
+                const Text('Items:', style: TextStyle(fontWeight: FontWeight.bold)),
+                ...order.items.map((item) => ListTile(
+                  leading: Image.asset(item.imageUrl, width: 40, height: 40, fit: BoxFit.cover),
+                  title: Text(item.productName),
+                  subtitle: Text('Qty: ${item.quantity}'),
+                  trailing: Text('\$${item.totalPrice.toStringAsFixed(2)}'),
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                )),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

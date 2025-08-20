@@ -1,47 +1,39 @@
 import 'package:flutter/material.dart';
 import '../models/farm.dart';
-
 class FarmCard extends StatelessWidget {
   final VoidCallback onTap;
   final Farm farm;
   final bool isLoading;
   final bool hasError;
   final VoidCallback? onRetry;
+  final VoidCallback? onFavoriteToggle;
 
   const FarmCard({
-    super.key,
+    Key? key,
     required this.onTap,
     required this.farm,
     this.isLoading = false,
     this.hasError = false,
     this.onRetry,
-  });
+    this.onFavoriteToggle,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
+    // Show loading card if loading
     if (isLoading) {
       return _buildLoadingCard();
     }
-
+    // Show error card if error
     if (hasError) {
       return _buildErrorCard(context);
     }
-
-    return Card(
-      elevation: 2,
-      margin: const EdgeInsets.symmetric(vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        splashColor: colorScheme.primary.withAlpha(26),
-        highlightColor: colorScheme.primary.withAlpha(13),
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        margin: const EdgeInsets.symmetric(vertical: 8),
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -50,18 +42,19 @@ class FarmCard extends StatelessWidget {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Farm image
                   ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Image.network(
                       farm.imageUrl,
-                      width: 100,
-                      height: 100,
+                      width: 64,
+                      height: 64,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => Container(
-                        width: 100,
-                        height: 100,
-                        color: Colors.grey[200],
-                        child: const Icon(Icons.agriculture, size: 40),
+                        width: 64,
+                        height: 64,
+                        color: theme.hintColor.withOpacity(0.1),
+                        child: const Icon(Icons.broken_image),
                       ),
                     ),
                   ),
